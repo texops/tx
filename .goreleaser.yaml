@@ -1,0 +1,43 @@
+version: 2
+
+builds:
+  - main: ./cmd/tx
+    binary: tx
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "tx_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+
+brews:
+  - repository:
+      owner: texops
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    name: tx
+    homepage: "https://github.com/texops/tx"
+    description: "CLI for TexOps"
+    license: "MIT"
+    install: |
+      bin.install "tx"
+    test: |
+      system "#{bin}/tx", "--version"
