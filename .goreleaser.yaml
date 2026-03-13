@@ -16,11 +16,13 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: "tx_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
 
 checksum:
   name_template: "checksums.txt"
@@ -28,7 +30,7 @@ checksum:
 changelog:
   sort: asc
 
-brews:
+homebrew_casks:
   - repository:
       owner: texops
       name: homebrew-tap
@@ -36,8 +38,5 @@ brews:
     name: tx
     homepage: "https://github.com/texops/tx"
     description: "CLI for TexOps"
-    license: "MIT"
-    install: |
-      bin.install "tx"
-    test: |
-      system "#{bin}/tx", "--version"
+    binaries:
+      - tx
