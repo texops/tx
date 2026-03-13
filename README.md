@@ -32,7 +32,7 @@ tx token delete [name]          # Delete an API token
 Project settings are stored in `.texops.yaml`:
 
 - `project_key` — unique identifier (safe to commit)
-- `distribution_version` — TexLive version (e.g. `texlive:2021`)
+- `texlive` — TexLive version (e.g. `texlive:2021`)
 - `compiler` — LaTeX compiler: `pdflatex` (default), `xelatex`, `lualatex`, `latex`, `platex`, `uplatex`
 - `documents` — list of documents to build
 

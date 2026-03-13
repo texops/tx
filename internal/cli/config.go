@@ -34,20 +34,20 @@ func generateProjectKey() (string, error) {
 }
 
 type Document struct {
-	Name                string `yaml:"name"`
-	Main                string `yaml:"main"`
-	Directory           string `yaml:"directory,omitempty"`
-	Output              string `yaml:"output,omitempty"`
-	DistributionVersion string `yaml:"distribution_version,omitempty"`
-	Compiler            string `yaml:"compiler,omitempty"`
+	Name      string `yaml:"name"`
+	Main      string `yaml:"main"`
+	Directory string `yaml:"directory,omitempty"`
+	Output    string `yaml:"output,omitempty"`
+	Texlive   string `yaml:"texlive,omitempty"`
+	Compiler  string `yaml:"compiler,omitempty"`
 }
 
 type Config struct {
-	ProjectKey          string     `yaml:"project_key,omitempty"`
-	DistributionVersion string     `yaml:"distribution_version"`
-	Compiler            string     `yaml:"compiler,omitempty"`
-	APIURL              string     `yaml:"api_url,omitempty"`
-	Documents           []Document `yaml:"documents"`
+	ProjectKey string     `yaml:"project_key,omitempty"`
+	Texlive    string     `yaml:"texlive"`
+	Compiler   string     `yaml:"compiler,omitempty"`
+	APIURL     string     `yaml:"api_url,omitempty"`
+	Documents  []Document `yaml:"documents"`
 }
 
 func ParseConfig(content string) (Config, error) {
@@ -78,13 +78,13 @@ func ParseConfig(content string) (Config, error) {
 		}
 	}
 
-	dvRaw, ok := raw["distribution_version"]
-	if !ok || dvRaw == nil {
-		return Config{}, fmt.Errorf("invalid config: missing required field 'distribution_version'")
+	tlRaw, ok := raw["texlive"]
+	if !ok || tlRaw == nil {
+		return Config{}, fmt.Errorf("invalid config: missing required field 'texlive'")
 	}
-	dv, ok := dvRaw.(string)
-	if !ok || dv == "" {
-		return Config{}, fmt.Errorf("invalid config: distribution_version must be a string")
+	tl, ok := tlRaw.(string)
+	if !ok || tl == "" {
+		return Config{}, fmt.Errorf("invalid config: texlive must be a string")
 	}
 
 	docsRaw, ok := raw["documents"]
@@ -165,14 +165,14 @@ func ParseConfig(content string) (Config, error) {
 			return Config{}, fmt.Errorf("invalid config: documents[%d] 'output' must not escape project directory", i)
 		}
 
-		docDV := dv
-		if dvRaw, ok := docMap["distribution_version"]; ok && dvRaw != nil {
-			dvStr, ok := dvRaw.(string)
+		docTL := tl
+		if tlRaw, ok := docMap["texlive"]; ok && tlRaw != nil {
+			tlStr, ok := tlRaw.(string)
 			if !ok {
-				return Config{}, fmt.Errorf("invalid config: documents[%d] 'distribution_version' must be a string", i)
+				return Config{}, fmt.Errorf("invalid config: documents[%d] 'texlive' must be a string", i)
 			}
-			if dvStr != "" {
-				docDV = dvStr
+			if tlStr != "" {
+				docTL = tlStr
 			}
 		}
 
@@ -191,12 +191,12 @@ func ParseConfig(content string) (Config, error) {
 		}
 
 		documents = append(documents, Document{
-			Name:                name,
-			Main:                mainStr,
-			Directory:           directory,
-			Output:              output,
-			DistributionVersion: docDV,
-			Compiler:            docCompiler,
+			Name:      name,
+			Main:      mainStr,
+			Directory: directory,
+			Output:    output,
+			Texlive:   docTL,
+			Compiler:  docCompiler,
 		})
 	}
 
@@ -215,11 +215,11 @@ func ParseConfig(content string) (Config, error) {
 	}
 
 	return Config{
-		ProjectKey:          projectKey,
-		DistributionVersion: dv,
-		Compiler:            topCompiler,
-		APIURL:              apiURL,
-		Documents:           documents,
+		ProjectKey: projectKey,
+		Texlive:    tl,
+		Compiler:   topCompiler,
+		APIURL:     apiURL,
+		Documents:  documents,
 	}, nil
 }
 
