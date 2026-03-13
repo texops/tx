@@ -891,9 +891,9 @@ func TestBuildCmd_NoCache(t *testing.T) {
 
 			case r.URL.Path == "/projects/prj_nc/build" && r.Method == "POST":
 				var body struct {
-					Main                string            `json:"main"`
-					Texlive             string            `json:"distribution_version"`
-					BuildOptions        map[string]string `json:"build_options"`
+					Main         string            `json:"main"`
+					Texlive      string            `json:"distribution_version"`
+					BuildOptions map[string]string `json:"build_options"`
 				}
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedBuildOptions = body.BuildOptions
@@ -1235,9 +1235,9 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				var body struct {
-					Main                string `json:"main"`
-					Directory           string `json:"directory"`
-					Texlive             string `json:"distribution_version"`
+					Main      string `json:"main"`
+					Directory string `json:"directory"`
+					Texlive   string `json:"distribution_version"`
 				}
 				json.NewDecoder(r.Body).Decode(&body)
 				mu.Lock()
