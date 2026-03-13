@@ -69,7 +69,7 @@ func TestLoginCmd(t *testing.T) {
 			switch r.URL.Path {
 			case "/auth/device-code":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"device_code":      "dc_test123",
 					"user_code":        "ABCD-1234",
 					"verification_url": "https://texops.example.com/auth/verify",
@@ -85,7 +85,7 @@ func TestLoginCmd(t *testing.T) {
 					json.NewEncoder(w).Encode(map[string]string{"error": "authorization_pending"})
 				} else {
 					// Third poll: authorized
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
 						"jwt":        "eyJhbGciOi.test-jwt-token.sig",
 						"expires_at": "2026-03-30T00:00:00Z",
 					})
@@ -124,7 +124,7 @@ func TestLoginCmd(t *testing.T) {
 			switch r.URL.Path {
 			case "/auth/device-code":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"device_code":      "dc_test_exp",
 					"user_code":        "EXPD-5678",
 					"verification_url": "https://texops.example.com/auth/verify",
@@ -190,7 +190,7 @@ func TestLoginCmd(t *testing.T) {
 			switch r.URL.Path {
 			case "/auth/device-code":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"device_code":      "dc_file",
 					"user_code":        "FILE-1234",
 					"verification_url": "https://texops.example.com/auth/verify",
@@ -199,7 +199,7 @@ func TestLoginCmd(t *testing.T) {
 				})
 			case "/auth/token":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"jwt":        "file-stored-jwt-token",
 					"expires_at": "2026-03-30T00:00:00Z",
 				})
@@ -610,10 +610,10 @@ func TestBuildCmd(t *testing.T) {
 			switch {
 			case r.URL.Path == "/projects/prj_build/sync" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case r.URL.Path == "/projects/prj_build/build" && r.Method == "POST":
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_build/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -646,7 +646,7 @@ func TestBuildCmd(t *testing.T) {
 				})
 			case r.URL.Path == "/api/projects/prj_build/session" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -700,12 +700,12 @@ documents:
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/sync") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				projectID := strings.TrimPrefix(r.URL.Path, "/projects/")
 				projectID = strings.TrimSuffix(projectID, "/build")
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   fmt.Sprintf("/projects/%s/builds/bld_001/output", projectID),
 					"build_id": "bld_001",
@@ -738,7 +738,7 @@ documents:
 				})
 			case strings.Contains(r.URL.Path, "/session") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -887,7 +887,7 @@ func TestBuildCmd_NoCache(t *testing.T) {
 			switch {
 			case r.URL.Path == "/projects/prj_nc/sync" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case r.URL.Path == "/projects/prj_nc/build" && r.Method == "POST":
 				var body struct {
@@ -898,7 +898,7 @@ func TestBuildCmd_NoCache(t *testing.T) {
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedBuildOptions = body.BuildOptions
 
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_nc/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -928,7 +928,7 @@ func TestBuildCmd_NoCache(t *testing.T) {
 				})
 			case r.URL.Path == "/api/projects/prj_nc/session" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -969,21 +969,21 @@ documents:
 	})
 
 	t.Run("does not send build_options when --no-cache is not set", func(t *testing.T) {
-		var receivedBody map[string]interface{}
+		var receivedBody map[string]any
 		pdfContent := []byte("%PDF-1.4 test")
 
 		instSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case r.URL.Path == "/projects/prj_nc2/sync" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case r.URL.Path == "/projects/prj_nc2/build" && r.Method == "POST":
 				if err := json.NewDecoder(r.Body).Decode(&receivedBody); err != nil {
 					t.Errorf("failed to decode build request body: %v", err)
 				}
 
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_nc2/builds/bld_002/output",
 					"build_id": "bld_002",
@@ -1013,7 +1013,7 @@ documents:
 				})
 			case r.URL.Path == "/api/projects/prj_nc2/session" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -1067,7 +1067,7 @@ func TestBuildCmd_SizeConfirmation(t *testing.T) {
 			case r.URL.Path == "/projects/prj_conf/sync" && r.Method == "POST":
 				// Report main.tex as missing to trigger upload
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"missing": []string{"main.tex"},
 				})
 
@@ -1075,7 +1075,7 @@ func TestBuildCmd_SizeConfirmation(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 
 			case r.URL.Path == "/projects/prj_conf/build" && r.Method == "POST":
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_conf/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -1105,7 +1105,7 @@ func TestBuildCmd_SizeConfirmation(t *testing.T) {
 				})
 			case r.URL.Path == "/api/projects/prj_conf/session" && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -1231,7 +1231,7 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 			case strings.HasSuffix(r.URL.Path, "/sync") && r.Method == "POST":
 				syncCount.Add(1)
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				var body struct {
@@ -1248,7 +1248,7 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 				projectID = strings.TrimSuffix(projectID, "/build")
 
 				if failDoc != "" && body.Main == failDoc {
-					doneData, _ := json.Marshal(map[string]interface{}{
+					doneData, _ := json.Marshal(map[string]any{
 						"status":  "error",
 						"message": "compilation error in " + body.Main,
 					})
@@ -1257,7 +1257,7 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 					return
 				}
 
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   fmt.Sprintf("/projects/%s/builds/bld_001/output", projectID),
 					"build_id": "bld_001",
@@ -1288,7 +1288,7 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 			case strings.Contains(r.URL.Path, "/session") && r.Method == "POST":
 				sessionCount.Add(1)
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -1507,7 +1507,7 @@ func TestBuildCmd_Compiler(t *testing.T) {
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/sync") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				var body struct {
@@ -1517,7 +1517,7 @@ func TestBuildCmd_Compiler(t *testing.T) {
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedCompiler = body.Compiler
 
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_comp/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -1547,7 +1547,7 @@ func TestBuildCmd_Compiler(t *testing.T) {
 				})
 			case strings.Contains(r.URL.Path, "/session") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -1596,7 +1596,7 @@ documents:
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/sync") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				var body struct {
@@ -1608,7 +1608,7 @@ documents:
 				receivedCompilers = append(receivedCompilers, body.Compiler)
 				mu.Unlock()
 
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_comp2/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -1638,7 +1638,7 @@ documents:
 				})
 			case strings.Contains(r.URL.Path, "/session") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -1692,7 +1692,7 @@ documents:
 			switch {
 			case strings.HasSuffix(r.URL.Path, "/sync") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": []string{}})
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				var body struct {
@@ -1701,7 +1701,7 @@ documents:
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedCompiler = body.Compiler
 
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_comp3/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -1731,7 +1731,7 @@ documents:
 				})
 			case strings.Contains(r.URL.Path, "/session") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
 					"cache_cold":   false,
@@ -2013,7 +2013,7 @@ func TestTokenCreateCmd(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "POST" {
-				var body map[string]interface{}
+				var body map[string]any
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedName = body["name"].(string)
 				if v, ok := body["expires_in"].(float64); ok {
@@ -2023,7 +2023,7 @@ func TestTokenCreateCmd(t *testing.T) {
 				expires := "2026-03-30T00:00:00Z"
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusCreated)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"token":      "texops_token_abcdef1234567890abcdef1234567890abc",
 					"id":         "tok_01ABC",
 					"name":       receivedName,
@@ -2060,14 +2060,14 @@ func TestTokenCreateCmd(t *testing.T) {
 	})
 
 	t.Run("create with no-expiry flag", func(t *testing.T) {
-		var receivedBody map[string]interface{}
+		var receivedBody map[string]any
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "POST" {
 				json.NewDecoder(r.Body).Decode(&receivedBody)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusCreated)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"token":      "texops_token_noexpiry123456789012345678901234",
 					"id":         "tok_02DEF",
 					"name":       "permanent",
@@ -2131,7 +2131,7 @@ func TestTokenCreateCmd(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "POST" {
-				var body map[string]interface{}
+				var body map[string]any
 				json.NewDecoder(r.Body).Decode(&body)
 				if v, ok := body["expires_in"].(float64); ok {
 					i := int64(v)
@@ -2139,7 +2139,7 @@ func TestTokenCreateCmd(t *testing.T) {
 				}
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusCreated)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"token":      "texops_token_interactive12345678901234567890",
 					"id":         "tok_03GHI",
 					"name":       "interactive",
@@ -2187,12 +2187,12 @@ func TestTokenCreateCmd(t *testing.T) {
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "POST" {
-				var body map[string]interface{}
+				var body map[string]any
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedName = body["name"].(string)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusCreated)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"token":      "texops_token_interactive12345678901234567890",
 					"id":         "tok_04JKL",
 					"name":       receivedName,
@@ -2232,7 +2232,7 @@ func TestTokenListCmd(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "GET" {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]interface{}{
+				json.NewEncoder(w).Encode([]map[string]any{
 					{
 						"id":           "tok_01ABC",
 						"name":         "CI prod",
@@ -2278,7 +2278,7 @@ func TestTokenListCmd(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "GET" {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]interface{}{})
+				json.NewEncoder(w).Encode([]map[string]any{})
 				return
 			}
 			w.WriteHeader(404)
@@ -2307,7 +2307,7 @@ func TestTokenDeleteCmd(t *testing.T) {
 			switch {
 			case r.URL.Path == "/auth/tokens" && r.Method == "GET":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]interface{}{
+				json.NewEncoder(w).Encode([]map[string]any{
 					{
 						"id":         "tok_01ABC",
 						"name":       "CI prod",
@@ -2347,7 +2347,7 @@ func TestTokenDeleteCmd(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "GET" {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]interface{}{
+				json.NewEncoder(w).Encode([]map[string]any{
 					{
 						"id":         "tok_01ABC",
 						"name":       "CI prod",
@@ -2375,7 +2375,7 @@ func TestTokenDeleteCmd(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "GET" {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]interface{}{
+				json.NewEncoder(w).Encode([]map[string]any{
 					{
 						"id":         "tok_01ABC",
 						"name":       "CI prod",
@@ -2405,7 +2405,7 @@ func TestTokenDeleteCmd(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/auth/tokens" && r.Method == "GET" {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode([]map[string]interface{}{})
+				json.NewEncoder(w).Encode([]map[string]any{})
 				return
 			}
 			w.WriteHeader(404)

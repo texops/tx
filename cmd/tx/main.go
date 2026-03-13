@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -46,11 +47,11 @@ func main() {
 	opts.Token.Delete.UI = ui
 
 	if _, err := parser.Parse(); err != nil {
-		if flagsErr, ok := err.(*flags.Error); ok {
-			switch flagsErr.Type {
-			case flags.ErrHelp:
+		if flagsErr, ok := errors.AsType[*flags.Error](err); ok {
+			switch {
+			case errors.Is(flagsErr.Type, flags.ErrHelp):
 				os.Exit(0)
-			case flags.ErrCommandRequired:
+			case errors.Is(flagsErr.Type, flags.ErrCommandRequired):
 				parser.WriteHelp(os.Stdout)
 				os.Exit(0)
 			}

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -50,7 +51,7 @@ type Config struct {
 }
 
 func ParseConfig(content string) (Config, error) {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
 		return Config{}, fmt.Errorf("invalid config: expected a YAML mapping")
 	}
@@ -90,7 +91,7 @@ func ParseConfig(content string) (Config, error) {
 	if !ok || docsRaw == nil {
 		return Config{}, fmt.Errorf("invalid config: missing required field 'documents'")
 	}
-	docsList, ok := docsRaw.([]interface{})
+	docsList, ok := docsRaw.([]any)
 	if !ok {
 		return Config{}, fmt.Errorf("invalid config: 'documents' must be a list")
 	}
@@ -101,7 +102,7 @@ func ParseConfig(content string) (Config, error) {
 	seen := make(map[string]bool)
 	var documents []Document
 	for i, item := range docsList {
-		docMap, ok := item.(map[string]interface{})
+		docMap, ok := item.(map[string]any)
 		if !ok {
 			return Config{}, fmt.Errorf("invalid config: documents[%d] must be a mapping", i)
 		}
@@ -223,12 +224,7 @@ func ParseConfig(content string) (Config, error) {
 }
 
 func isValidCompiler(compiler string) bool {
-	for _, c := range AllowedCompilers {
-		if c == compiler {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllowedCompilers, compiler)
 }
 
 // DocumentByName looks up a document by name.

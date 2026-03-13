@@ -111,7 +111,7 @@ func storeJWT(jwt string) error {
 		// Keyring unavailable, fall back to file-based storage
 		path, fileErr := writeJWTCredential(jwt)
 		if fileErr != nil {
-			return fmt.Errorf("failed to store JWT: keyring error: %v, file error: %w", err, fileErr)
+			return fmt.Errorf("failed to store JWT: keyring error: %w, file error: %w", err, fileErr)
 		}
 		_ = path // stored successfully in file
 		return nil

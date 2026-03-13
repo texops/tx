@@ -20,7 +20,7 @@ import (
 // an exp claim, but no valid signature.
 func makeTestJWT(exp time.Time) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"ES256"}`))
-	claims, _ := json.Marshal(map[string]interface{}{"exp": exp.Unix(), "sub": "usr_test"})
+	claims, _ := json.Marshal(map[string]any{"exp": exp.Unix(), "sub": "usr_test"})
 	payload := base64.RawURLEncoding.EncodeToString(claims)
 	return header + "." + payload + ".fake-sig"
 }
