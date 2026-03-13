@@ -40,9 +40,9 @@ type SessionResponse struct {
 }
 
 type CreateProjectResponse struct {
-	ID                  string `json:"id"`
-	Name                string `json:"name"`
-	DistributionVersion string `json:"distribution_version"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Texlive string `json:"distribution_version"`
 }
 
 type SyncResult struct {

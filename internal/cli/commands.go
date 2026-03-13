@@ -74,10 +74,10 @@ type LoginCmd struct {
 }
 
 type InitCmd struct {
-	DistVersion string `long:"dist-version" default:"texlive:2021" description:"TexLive distribution version"`
-	Compiler    string `long:"compiler" default:"pdflatex" description:"LaTeX compiler (pdflatex, xelatex, lualatex, latex, platex, uplatex)"`
-	Main        string `long:"main" default:"main.tex" description:"Main TeX file (fallback when no .tex files discovered)"`
-	UI          *UI    `no-flag:"true"`
+	Texlive  string `long:"texlive" default:"texlive:2021" description:"TexLive distribution version"`
+	Compiler string `long:"compiler" default:"pdflatex" description:"LaTeX compiler (pdflatex, xelatex, lualatex, latex, platex, uplatex)"`
+	Main     string `long:"main" default:"main.tex" description:"Main TeX file (fallback when no .tex files discovered)"`
+	UI       *UI    `no-flag:"true"`
 }
 
 type BuildCmd struct {
@@ -418,10 +418,10 @@ func (cmd *InitCmd) Execute(args []string) error {
 		return fmt.Errorf("cannot check .texops.yaml: %w", err)
 	}
 
-	return initProject(dir, cmd.DistVersion, cmd.Compiler, cmd.Main, ui)
+	return initProject(dir, cmd.Texlive, cmd.Compiler, cmd.Main, ui)
 }
 
-func initProject(dir, distVersion, compiler, mainFallback string, ui *UI) error {
+func initProject(dir, texlive, compiler, mainFallback string, ui *UI) error {
 	configPath := filepath.Join(dir, ".texops.yaml")
 
 	discovered, err := DiscoverDocuments(dir)
@@ -454,7 +454,7 @@ func initProject(dir, distVersion, compiler, mainFallback string, ui *UI) error 
 		return err
 	}
 
-	configContent := generateConfigYAML(projectKey, distVersion, compiler, selected)
+	configContent := generateConfigYAML(projectKey, texlive, compiler, selected)
 	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		return fmt.Errorf("failed to write .texops.yaml: %w", err)
 	}
@@ -467,11 +467,11 @@ func initProject(dir, distVersion, compiler, mainFallback string, ui *UI) error 
 	return nil
 }
 
-// generateConfigYAML produces .texops.yaml content from a project key, distribution version, compiler, and documents.
-func generateConfigYAML(projectKey, distVersion, compiler string, docs []Document) string {
+// generateConfigYAML produces .texops.yaml content from a project key, texlive version, compiler, and documents.
+func generateConfigYAML(projectKey, texlive, compiler string, docs []Document) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "project_key: %q\n", projectKey)
-	fmt.Fprintf(&b, "distribution_version: %q\n", distVersion)
+	fmt.Fprintf(&b, "texlive: %q\n", texlive)
 	fmt.Fprintf(&b, "compiler: %q\n", compiler)
 	fmt.Fprintf(&b, "\ndocuments:\n")
 	for _, doc := range docs {
@@ -572,7 +572,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 	}
 
 	sp := ui.Spin("Resolving project...")
-	project, err := api.CreateProject(filepath.Base(dir), config.DistributionVersion, config.ProjectKey)
+	project, err := api.CreateProject(filepath.Base(dir), config.Texlive, config.ProjectKey)
 	if err != nil {
 		sp.Fail(fmt.Sprintf("Failed to resolve project: %s", err))
 		return err
@@ -590,7 +590,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 	totalSize := TotalSize(files)
 	sp.Stop(fmt.Sprintf("Found %d files (%s)", len(files), FormatSize(totalSize)))
 
-	// Group documents by effective distribution_version
+	// Group documents by effective texlive version
 	type versionGroup struct {
 		version string
 		docs    []Document
@@ -598,7 +598,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 	groupMap := make(map[string]*versionGroup)
 	var groupOrder []string
 	for _, doc := range docs {
-		v := doc.DistributionVersion
+		v := doc.Texlive
 		if _, ok := groupMap[v]; !ok {
 			groupMap[v] = &versionGroup{version: v}
 			groupOrder = append(groupOrder, v)
@@ -756,7 +756,7 @@ func buildDocument(ui *UI, inst *InstanceClient, projectID, dir string, doc Docu
 		buildOptions = map[string]string{"no_cache": "true"}
 	}
 	compileStart := time.Now()
-	result, err := inst.Build(projectID, doc.Main, doc.Directory, doc.DistributionVersion, doc.Compiler, buildOptions, func(line string) {
+	result, err := inst.Build(projectID, doc.Main, doc.Directory, doc.Texlive, doc.Compiler, buildOptions, func(line string) {
 		ui.Log(line)
 	})
 	if err != nil {

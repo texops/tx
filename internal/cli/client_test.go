@@ -45,7 +45,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "prj_abc123", result.ID)
 		assert.Equal(t, "myproject", result.Name)
-		assert.Equal(t, "texlive:2021", result.DistributionVersion)
+		assert.Equal(t, "texlive:2021", result.Texlive)
 	})
 
 	t.Run("returns error on non-success response", func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 }
 
 func TestAPIClient_GetSession(t *testing.T) {
-	t.Run("returns session info with distribution_version", func(t *testing.T) {
+	t.Run("returns session info with texlive", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
 			assert.Equal(t, "/api/projects/prj_abc/session", r.URL.Path)
@@ -156,7 +156,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 		assert.True(t, session.CacheCold)
 	})
 
-	t.Run("sends distribution_version in request body", func(t *testing.T) {
+	t.Run("sends texlive in request body", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]string
 			err := json.NewDecoder(r.Body).Decode(&body)

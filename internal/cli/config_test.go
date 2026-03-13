@@ -14,7 +14,7 @@ import (
 func TestParseConfig(t *testing.T) {
 	t.Run("parses valid multi-document config", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -23,19 +23,19 @@ documents:
     main: slides/slides.tex
 `)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.DistributionVersion)
+		assert.Equal(t, "texlive:2021", config.Texlive)
 		require.Len(t, config.Documents, 2)
 		assert.Equal(t, "paper", config.Documents[0].Name)
 		assert.Equal(t, "paper.tex", config.Documents[0].Main)
 		assert.Equal(t, "output.pdf", config.Documents[0].Output)
-		assert.Equal(t, "texlive:2021", config.Documents[0].DistributionVersion)
+		assert.Equal(t, "texlive:2021", config.Documents[0].Texlive)
 		assert.Equal(t, "slides", config.Documents[1].Name)
 		assert.Equal(t, "slides/slides.tex", config.Documents[1].Main)
 	})
 
 	t.Run("defaults output to main with .pdf extension per document", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2019"
+texlive: "texlive:2019"
 documents:
   - name: thesis
     main: thesis.tex
@@ -47,35 +47,35 @@ documents:
 		assert.Equal(t, "appendix.pdf", config.Documents[1].Output)
 	})
 
-	t.Run("inherits top-level distribution_version", func(t *testing.T) {
+	t.Run("inherits top-level texlive", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
 `)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.Documents[0].DistributionVersion)
+		assert.Equal(t, "texlive:2021", config.Documents[0].Texlive)
 	})
 
-	t.Run("per-document distribution_version overrides top-level", func(t *testing.T) {
+	t.Run("per-document texlive overrides top-level", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
   - name: legacy
     main: legacy.tex
-    distribution_version: "texlive:2013"
+    texlive: "texlive:2013"
 `)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.Documents[0].DistributionVersion)
-		assert.Equal(t, "texlive:2013", config.Documents[1].DistributionVersion)
+		assert.Equal(t, "texlive:2021", config.Documents[0].Texlive)
+		assert.Equal(t, "texlive:2013", config.Documents[1].Texlive)
 	})
 
 	t.Run("rejects duplicate document names", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -87,7 +87,7 @@ documents:
 	})
 
 	t.Run("rejects old-style top-level main field", func(t *testing.T) {
-		_, err := cli.ParseConfig(`distribution_version: "texlive:2021"
+		_, err := cli.ParseConfig(`texlive: "texlive:2021"
 main: paper.tex
 `)
 		require.Error(t, err)
@@ -95,36 +95,36 @@ main: paper.tex
 		assert.Contains(t, err.Error(), "documents")
 	})
 
-	t.Run("rejects missing distribution_version", func(t *testing.T) {
+	t.Run("rejects missing texlive", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
 documents:
   - name: paper
     main: paper.tex
 `)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing required field 'distribution_version'")
+		assert.Contains(t, err.Error(), "missing required field 'texlive'")
 	})
 
-	t.Run("rejects non-string distribution_version", func(t *testing.T) {
+	t.Run("rejects non-string texlive", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: 2021
+texlive: 2021
 documents:
   - name: paper
     main: paper.tex
 `)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "distribution_version must be a string")
+		assert.Contains(t, err.Error(), "texlive must be a string")
 	})
 
 	t.Run("rejects missing documents field", func(t *testing.T) {
-		_, err := cli.ParseConfig(`distribution_version: "texlive:2021"`)
+		_, err := cli.ParseConfig(`texlive: "texlive:2021"`)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "missing required field 'documents'")
 	})
 
 	t.Run("rejects empty documents list", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents: []
 `)
 		require.Error(t, err)
@@ -133,7 +133,7 @@ documents: []
 
 	t.Run("rejects document without name", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - main: paper.tex
 `)
@@ -143,7 +143,7 @@ documents:
 
 	t.Run("rejects document without main", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
 `)
@@ -165,7 +165,7 @@ documents:
 
 	t.Run("parses api_url", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 api_url: "https://custom.example.com"
 documents:
   - name: paper
@@ -177,7 +177,7 @@ documents:
 
 	t.Run("rejects main that escapes project directory", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: ../../etc/evil.tex
@@ -188,7 +188,7 @@ documents:
 
 	t.Run("rejects absolute main path", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: /etc/passwd
@@ -199,7 +199,7 @@ documents:
 
 	t.Run("rejects output that escapes project directory", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -211,7 +211,7 @@ documents:
 
 	t.Run("allows subdirectory main and output paths", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: slides
     main: subdir/slides.tex
@@ -224,18 +224,18 @@ documents:
 
 	t.Run("accepts any distribution version string", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2013"
+texlive: "texlive:2013"
 documents:
   - name: paper
     main: paper.tex
 `)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2013", config.DistributionVersion)
+		assert.Equal(t, "texlive:2013", config.Texlive)
 	})
 
 	t.Run("rejects non-string output", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -245,21 +245,21 @@ documents:
 		assert.Contains(t, err.Error(), "'output' must be a string")
 	})
 
-	t.Run("rejects non-string per-document distribution_version", func(t *testing.T) {
+	t.Run("rejects non-string per-document texlive", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
-    distribution_version: 2021
+    texlive: 2021
 `)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "'distribution_version' must be a string")
+		assert.Contains(t, err.Error(), "'texlive' must be a string")
 	})
 
 	t.Run("parses document with directory field", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -273,7 +273,7 @@ documents:
 
 	t.Run("directory defaults to empty when omitted", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -284,7 +284,7 @@ documents:
 
 	t.Run("rejects directory that escapes project root via traversal", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -296,7 +296,7 @@ documents:
 
 	t.Run("rejects absolute directory path", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -308,7 +308,7 @@ documents:
 
 	t.Run("rejects non-string directory", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -320,7 +320,7 @@ documents:
 
 	t.Run("existing configs without directory still parse correctly", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -340,7 +340,7 @@ documents:
 
 	t.Run("output includes directory to prevent collisions", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -352,7 +352,7 @@ documents:
 
 	t.Run("output has no directory prefix when directory is empty", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -365,7 +365,7 @@ documents:
 func TestParseConfigCompiler(t *testing.T) {
 	t.Run("omitted compiler defaults to pdflatex", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -377,7 +377,7 @@ documents:
 
 	t.Run("top-level compiler is inherited by documents", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: xelatex
 documents:
   - name: paper
@@ -393,7 +393,7 @@ documents:
 
 	t.Run("per-document compiler overrides top-level", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: xelatex
 documents:
   - name: paper
@@ -411,7 +411,7 @@ documents:
 	t.Run("all valid compilers are accepted at top level", func(t *testing.T) {
 		for _, compiler := range cli.AllowedCompilers {
 			config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: ` + compiler + `
 documents:
   - name: paper
@@ -426,7 +426,7 @@ documents:
 	t.Run("all valid compilers are accepted per document", func(t *testing.T) {
 		for _, compiler := range cli.AllowedCompilers {
 			config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -439,7 +439,7 @@ documents:
 
 	t.Run("rejects invalid top-level compiler", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: mslatex
 documents:
   - name: paper
@@ -452,7 +452,7 @@ documents:
 
 	t.Run("rejects invalid per-document compiler", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -465,7 +465,7 @@ documents:
 
 	t.Run("rejects non-string top-level compiler", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: 42
 documents:
   - name: paper
@@ -477,7 +477,7 @@ documents:
 
 	t.Run("rejects non-string per-document compiler", func(t *testing.T) {
 		_, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -492,7 +492,7 @@ func TestParseConfigProjectKey(t *testing.T) {
 	t.Run("parses project_key when present", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
 project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -503,7 +503,7 @@ documents:
 
 	t.Run("project_key is empty when absent", func(t *testing.T) {
 		config, err := cli.ParseConfig(`
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -540,33 +540,33 @@ func TestGenerateConfigYAML(t *testing.T) {
 		}
 		content := cli.GenerateConfigYAML("testkey123", "texlive:2021", "pdflatex", docs)
 		assert.Contains(t, content, `project_key: "testkey123"`)
-		assert.Contains(t, content, `distribution_version: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "texlive:2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, `name: "paper"`)
 		assert.Contains(t, content, `main: "paper.tex"`)
 	})
 
-	t.Run("field ordering is project_key, distribution_version, compiler, documents", func(t *testing.T) {
+	t.Run("field ordering is project_key, texlive, compiler, documents", func(t *testing.T) {
 		docs := []cli.Document{
 			{Name: "paper", Main: "paper.tex"},
 		}
 		content := cli.GenerateConfigYAML("abc123", "texlive:2021", "pdflatex", docs)
 		pkIdx := strings.Index(content, "project_key:")
-		dvIdx := strings.Index(content, "distribution_version:")
+		dvIdx := strings.Index(content, "texlive:")
 		compIdx := strings.Index(content, "compiler:")
 		docsIdx := strings.Index(content, "documents:")
-		assert.Greater(t, dvIdx, pkIdx, "project_key should appear before distribution_version")
-		assert.Greater(t, compIdx, dvIdx, "compiler should appear after distribution_version")
+		assert.Greater(t, dvIdx, pkIdx, "project_key should appear before texlive")
+		assert.Greater(t, compIdx, dvIdx, "compiler should appear after texlive")
 		assert.Greater(t, docsIdx, compIdx, "documents should appear after compiler")
 	})
 }
 
 func TestDocumentByName(t *testing.T) {
 	config := cli.Config{
-		DistributionVersion: "texlive:2021",
+		Texlive: "texlive:2021",
 		Documents: []cli.Document{
-			{Name: "paper", Main: "paper.tex", Output: "paper.pdf", DistributionVersion: "texlive:2021"},
-			{Name: "slides", Main: "slides.tex", Output: "slides.pdf", DistributionVersion: "texlive:2021"},
+			{Name: "paper", Main: "paper.tex", Output: "paper.pdf", Texlive: "texlive:2021"},
+			{Name: "slides", Main: "slides.tex", Output: "slides.pdf", Texlive: "texlive:2021"},
 		},
 	}
 
@@ -585,7 +585,7 @@ func TestDocumentByName(t *testing.T) {
 func TestLoadConfig(t *testing.T) {
 	t.Run("loads config from directory", func(t *testing.T) {
 		dir := t.TempDir()
-		content := `distribution_version: "texlive:2021"
+		content := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -594,7 +594,7 @@ documents:
 
 		config, err := cli.LoadConfig(dir)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.DistributionVersion)
+		assert.Equal(t, "texlive:2021", config.Texlive)
 		require.Len(t, config.Documents, 1)
 		assert.Equal(t, "paper.tex", config.Documents[0].Main)
 	})
@@ -607,7 +607,7 @@ documents:
 
 func TestOldFormatWithProjectIDProducesMigrationError(t *testing.T) {
 	t.Run("old format with project_id and main triggers migration error", func(t *testing.T) {
-		content := `distribution_version: "texlive:2021"
+		content := `texlive: "texlive:2021"
 main: paper.tex
 project_id: prj_abc123
 `
@@ -618,7 +618,7 @@ project_id: prj_abc123
 	})
 
 	t.Run("old format with only main (no project_id) triggers migration error", func(t *testing.T) {
-		content := `distribution_version: "texlive:2021"
+		content := `texlive: "texlive:2021"
 main: paper.tex
 `
 		_, err := cli.ParseConfig(content)
@@ -627,7 +627,7 @@ main: paper.tex
 	})
 
 	t.Run("old format with main and output triggers migration error", func(t *testing.T) {
-		content := `distribution_version: "texlive:2021"
+		content := `texlive: "texlive:2021"
 main: paper.tex
 output: result.pdf
 `

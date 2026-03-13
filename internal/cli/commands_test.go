@@ -438,14 +438,14 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "helper.tex"), []byte(`\newcommand{\foo}{bar}`), 0600)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `distribution_version: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "texlive:2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, "documents:")
 		assert.Contains(t, content, `main: "paper.tex"`)
@@ -464,7 +464,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0600)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -484,14 +484,14 @@ func TestInitCmd(t *testing.T) {
 		t.Chdir(dir)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `distribution_version: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "texlive:2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, "documents:")
 		assert.Contains(t, content, `main: "main.tex"`)
@@ -504,7 +504,7 @@ func TestInitCmd(t *testing.T) {
 		t.Chdir(dir)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "pdflatex", Main: "thesis.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "thesis.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -523,7 +523,7 @@ func TestInitCmd(t *testing.T) {
 		t.Chdir(dir)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "pdflatex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", UI: ui}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "already exists")
@@ -538,7 +538,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0600)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -547,7 +547,7 @@ func TestInitCmd(t *testing.T) {
 		require.NoError(t, err)
 		config, err := cli.ParseConfig(string(data))
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.DistributionVersion)
+		assert.Equal(t, "texlive:2021", config.Texlive)
 		assert.Equal(t, "pdflatex", config.Compiler)
 		assert.Len(t, config.Documents, 2)
 		assert.Len(t, config.ProjectKey, 22, "tx init should generate a 22-char project_key")
@@ -570,7 +570,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -589,7 +589,7 @@ func TestInitCmd(t *testing.T) {
 		t.Chdir(dir)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{DistVersion: "texlive:2021", Compiler: "badcompiler", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "badcompiler", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid compiler")
@@ -671,7 +671,7 @@ func TestBuildCmd(t *testing.T) {
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -762,7 +762,7 @@ documents:
 
 		dir := t.TempDir()
 		configContent := `project_key: "aBcDeFgHiJkLmNoPqRsT12"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -802,7 +802,7 @@ documents:
 		defer apiSrv.Close()
 
 		dir := t.TempDir()
-		configContent := `distribution_version: "texlive:2021"
+		configContent := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -891,9 +891,9 @@ func TestBuildCmd_NoCache(t *testing.T) {
 
 			case r.URL.Path == "/projects/prj_nc/build" && r.Method == "POST":
 				var body struct {
-					Main                string            `json:"main"`
-					DistributionVersion string            `json:"distribution_version"`
-					BuildOptions        map[string]string `json:"build_options"`
+					Main         string            `json:"main"`
+					Texlive      string            `json:"distribution_version"`
+					BuildOptions map[string]string `json:"build_options"`
 				}
 				json.NewDecoder(r.Body).Decode(&body)
 				receivedBuildOptions = body.BuildOptions
@@ -953,7 +953,7 @@ func TestBuildCmd_NoCache(t *testing.T) {
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1038,7 +1038,7 @@ documents:
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1130,7 +1130,7 @@ func TestBuildCmd_SizeConfirmation(t *testing.T) {
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: main
     main: main.tex
@@ -1235,13 +1235,13 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
 				var body struct {
-					Main                string `json:"main"`
-					Directory           string `json:"directory"`
-					DistributionVersion string `json:"distribution_version"`
+					Main      string `json:"main"`
+					Directory string `json:"directory"`
+					Texlive   string `json:"distribution_version"`
 				}
 				json.NewDecoder(r.Body).Decode(&body)
 				mu.Lock()
-				buildRequests = append(buildRequests, buildReq{Main: body.Main, Directory: body.Directory, Version: body.DistributionVersion})
+				buildRequests = append(buildRequests, buildReq{Main: body.Main, Directory: body.Directory, Version: body.Texlive})
 				mu.Unlock()
 
 				projectID := strings.TrimPrefix(r.URL.Path, "/projects/")
@@ -1324,7 +1324,7 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 	}
 
 	t.Run("two documents same version share one session and one sync", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1358,13 +1358,13 @@ documents:
 	})
 
 	t.Run("two documents different versions get separate sessions", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
   - name: slides
     main: slides.tex
-    distribution_version: "texlive:2019"
+    texlive: "texlive:2019"
 `
 		s := multiDocSetup(t, config, "")
 
@@ -1384,7 +1384,7 @@ documents:
 	})
 
 	t.Run("named document filter builds only specified document", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1404,7 +1404,7 @@ documents:
 	})
 
 	t.Run("unknown document name returns error", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1421,7 +1421,7 @@ documents:
 	})
 
 	t.Run("partial failure does not stop other documents", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1449,7 +1449,7 @@ documents:
 	})
 
 	t.Run("single document prints summary", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1466,7 +1466,7 @@ documents:
 	})
 
 	t.Run("document with directory passes directory in build request", func(t *testing.T) {
-		config := `distribution_version: "texlive:2021"
+		config := `texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
@@ -1571,7 +1571,7 @@ func TestBuildCmd_Compiler(t *testing.T) {
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: xelatex
 documents:
   - name: paper
@@ -1662,7 +1662,7 @@ documents:
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 compiler: xelatex
 documents:
   - name: paper
@@ -1755,7 +1755,7 @@ documents:
 
 		dir := t.TempDir()
 		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-distribution_version: "texlive:2021"
+texlive: "texlive:2021"
 documents:
   - name: paper
     main: paper.tex
