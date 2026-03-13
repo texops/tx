@@ -119,7 +119,7 @@ func (c *APIClient) CreateProject(name, distVersion, projectKey string) (CreateP
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req) //nolint:gosec // G704: URL from client config, not user input
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return CreateProjectResponse{}, err
 	}
@@ -629,11 +629,11 @@ func (c *InstanceClient) DownloadPDF(projectID, buildID, outputPath string) erro
 	_, copyErr := io.Copy(f, resp.Body)
 	closeErr := f.Close()
 	if copyErr != nil {
-		os.Remove(outputPath)
+		_ = os.Remove(outputPath)
 		return copyErr
 	}
 	if closeErr != nil {
-		os.Remove(outputPath)
+		_ = os.Remove(outputPath)
 		return closeErr
 	}
 	return nil

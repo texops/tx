@@ -1,0 +1,150 @@
+version: "2"
+
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    #- cyclop  # redundant with gocognit; cognitive complexity is more useful
+    - decorder
+    #- depguard  # requires extensive allowlist config; no import restrictions to enforce
+    #- dogsled  # only 3 cases in tests; alternative (throwaway vars) is worse
+    #- dupl  # all violations in test files; duplicate test setup is intentional for clarity
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
+    #- err113  # conflicts with wrapcheck; dynamic error context > sentinels for HTTP/validation
+    #- errcheck  # TODO: fix 30 issues — unchecked error returns
+    #- errchkjson  # TODO: fix 3 issues — unchecked JSON encoding errors
+    - errname
+    #- errorlint  # TODO: fix 2 issues — incorrect error comparison/wrapping [auto-fix]
+    #- exhaustive  # TODO: fix 1 issue — non-exhaustive enum switch
+    #- exhaustruct  # fights Go's zero-value semantics; unusable with external types
+    - exptostd
+    - fatcontext
+    #- forbidigo  # CLI entrypoints legitimately print to stdout
+    #- forcetypeassert  # TODO: fix 6 issues — type assertions without ok check
+    #- funcorder  # TODO: fix 4 issues — constructor/method ordering
+    #- funlen  # redundant with gocognit; test functions are naturally long
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    #- gochecknoglobals  # immutable lookup tables, test knobs, and test exports are fine
+    - gochecknoinits
+    - gochecksumtype
+    #- gocognit  # TODO: fix 6 issues — high cognitive complexity functions
+    #- goconst  # all violations in tests; constant extraction hurts test readability
+    #- gocritic  # TODO: fix 5 issues — bugs, performance, style [auto-fix]
+    #- gocyclo  # TODO: fix 4 issues — high cyclomatic complexity (redundant with gocognit)
+    - godoclint
+    - godot
+    - godox
+    - goheader
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - govet
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    #- intrange  # TODO: fix 2 issues — use integer range in for loops [auto-fix]
+    - iotamixing
+    #- ireturn  # flags interface returns mandated by external APIs and factory patterns
+    #- lll  # struct tags and go-flags options can't reasonably be split
+    - loggercheck
+    #- maintidx  # TODO: fix 4 issues — low maintainability index
+    - makezero
+    - mirror
+    - misspell
+    #- mnd  # contextually obvious numbers are clearer inline than named constants
+    #- modernize  # TODO: fix 4 issues — use modern Go idioms [auto-fix]
+    - musttag
+    - nakedret
+    #- nestif  # TODO: fix 8 issues — deeply nested if statements
+    #- nilerr  # TODO: fix 1 issue — returning nil when error is non-nil
+    - nilnesserr
+    #- nilnil  # TODO: fix 1 issue — simultaneous nil error and invalid value return
+    #- nlreturn  # conflicts with wsl_v5 which covers these cases
+    #- noctx  # TODO: fix 6 issues — missing context in HTTP calls
+    #- noinlineerr  # bans idiomatic "if err := ...; err != nil" pattern
+    - nolintlint
+    #- nonamedreturns  # TODO: fix 1 issue — named return
+    - nosprintfhostport
+    #- paralleltest  # TODO: fix 50 issues — tests missing t.Parallel()
+    #- perfsprint  # TODO: fix 6 issues — faster string formatting alternatives [auto-fix]
+    #- prealloc  # TODO: fix 1 issue — slice preallocation
+    #- predeclared  # TODO: fix 1 issue — variable shadows predeclared identifier
+    - promlinter
+    - protogetter
+    - reassign
+    - recvcheck
+    #- revive  # TODO: fix 50 issues — missing doc comments on exports [auto-fix]
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    #- staticcheck  # TODO: fix 3 issues — deprecated API usage [auto-fix]
+    #- tagalign  # creates absurdly wide lines with multi-tag structs
+    #- tagliatelle  # TODO: fix 1 issue — struct tag casing
+    - testableexamples
+    #- testifylint  # TODO: fix 12 issues — testify best practices [auto-fix]
+    - testpackage
+    - thelper
+    - tparallel
+    #- unconvert  # TODO: fix 1 issue — unnecessary type conversion
+    #- unparam  # TODO: fix 4 issues — unused function parameters (interface-mandated)
+    - unqueryvet
+    - unused
+    #- usestdlibvars  # TODO: fix 14 issues — use stdlib constants [auto-fix]
+    - usetesting
+    #- varnamelen  # fights idiomatic Go short names (r, w, b, f)
+    - wastedassign
+    - whitespace
+    #- wrapcheck  # TODO: fix 34 issues — unwrapped external errors
+    #- wsl_v5  # TODO: fix 45 issues — whitespace formatting [auto-fix]
+    - zerologlint
+
+  # Explicitly disable default linters that have TODO violations above.
+  disable:
+    - errcheck      # TODO (see above)
+    - staticcheck   # TODO (see above)
+
+  settings:
+    gosec:
+      excludes:
+        - G117  # "field matches secret pattern" — flags JWT struct fields, not actual secrets
+        - G204  # "subprocess launched with variable" — browser-open helper with controlled input
+        - G302  # "file permissions" — false positive on directory chmod with 0700
+        - G304  # "file inclusion via variable" — paths from config, not user input
+        - G704  # "SSRF via taint analysis" — URLs built from client config, not user input
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+
+  exclusions:
+    rules:
+      - linters: [testpackage]
+        path: internal/cli/progress_model_test\.go
+      - linters: [testpackage]
+        path: internal/cli/spinner_model_test\.go
+      - linters: [gosec]
+        text: "G104:"
+        path: _test\.go
+      - linters: [gosec]
+        text: "G101:"
+        path: _test\.go
+
+formatters:
+  enable:
+    - gofmt

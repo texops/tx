@@ -92,7 +92,7 @@ func TestProgressReader_FractionClampedToOne(t *testing.T) {
 	}
 
 	buf := make([]byte, 10)
-	pr.Read(buf)
+	_, _ = pr.Read(buf)
 	assert.Equal(t, 1.0, lastFraction)
 }
 

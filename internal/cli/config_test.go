@@ -590,7 +590,7 @@ documents:
   - name: paper
     main: paper.tex
 `
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(content), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(content), 0600))
 
 		config, err := cli.LoadConfig(dir)
 		require.NoError(t, err)

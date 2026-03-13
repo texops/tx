@@ -32,7 +32,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"id":                   "prj_abc123",
 				"name":                 "myproject",
 				"distribution_version": "texlive:2021",
@@ -51,7 +51,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 	t.Run("returns error on non-success response", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusConflict)
-			w.Write([]byte("no alive instance"))
+			_, _ = w.Write([]byte("no alive instance"))
 		}))
 		defer srv.Close()
 
@@ -71,7 +71,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"id":                   "prj_new",
 				"name":                 "myproject",
 				"distribution_version": "texlive:2021",
@@ -94,7 +94,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"id":                   "prj_legacy",
 				"name":                 "proj",
 				"distribution_version": "texlive:2021",
@@ -111,7 +111,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"id":                   "prj_existing",
 				"name":                 "myproject",
 				"distribution_version": "texlive:2021",
@@ -140,7 +140,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 			assert.Equal(t, "texlive:2021", body["distribution_version"])
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"instance_url": "https://10.0.0.1:8443",
 				"jwt":          "eyJhbGciOi...",
 				"cache_cold":   true,
@@ -258,7 +258,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 		defer srv.Close()
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0600))
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
@@ -289,7 +289,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 		defer srv.Close()
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0600))
 
 		var progressCalls []int64
 		client := cli.NewInstanceClient(srv.URL, "jwt")
@@ -762,7 +762,7 @@ func TestE2E_TwoClients(t *testing.T) {
 		assert.Len(t, syncResult.Missing, 1)
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}"), 0600))
 		err = inst.Upload(project.ID, dir, syncResult.Missing, nil)
 		require.NoError(t, err)
 

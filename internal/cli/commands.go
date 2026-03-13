@@ -455,7 +455,7 @@ func initProject(dir, distVersion, compiler, mainFallback string, ui *UI) error 
 	}
 
 	configContent := generateConfigYAML(projectKey, distVersion, compiler, selected)
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		return fmt.Errorf("failed to write .texops.yaml: %w", err)
 	}
 
@@ -565,7 +565,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 		} else {
 			updated = append([]byte(line), configData...)
 		}
-		if err := os.WriteFile(configPath, updated, 0o644); err != nil {
+		if err := os.WriteFile(configPath, updated, 0o600); err != nil {
 			return fmt.Errorf("updating .texops.yaml with project_key: %w", err)
 		}
 		config.ProjectKey = key
@@ -768,7 +768,7 @@ func buildDocument(ui *UI, inst *InstanceClient, projectID, dir string, doc Docu
 		compileElapsed := time.Since(compileStart)
 		ui.Success(fmt.Sprintf("Build complete (%.1fs)", compileElapsed.Seconds()))
 		outputPath := filepath.Join(dir, doc.Output)
-		if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
 			return docResult{Name: doc.Name, Output: doc.Output, Err: fmt.Errorf("cannot create output directory: %w", err)}
 		}
 		if result.BuildID == "" {
