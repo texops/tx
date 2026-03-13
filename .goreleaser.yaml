@@ -30,7 +30,7 @@ checksum:
 changelog:
   sort: asc
 
-homebrew_casks:
+brews:
   - repository:
       owner: texops
       name: homebrew-tap
@@ -38,5 +38,8 @@ homebrew_casks:
     name: tx
     homepage: "https://github.com/texops/tx"
     description: "CLI for TexOps"
-    binaries:
-      - tx
+    license: "MIT"
+    install: |
+      bin.install "tx"
+    test: |
+      system "#{bin}/tx", "--version"
