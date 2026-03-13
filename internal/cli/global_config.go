@@ -147,10 +147,10 @@ func writeJWTCredential(jwt string) (string, error) {
 	}
 	dir := filepath.Dir(path)
 
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("failed to create credentials directory: %w", err)
 	}
-	if err := os.Chmod(dir, 0700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil {
 		return "", fmt.Errorf("failed to set credentials directory permissions: %w", err)
 	}
 
@@ -160,10 +160,10 @@ func writeJWTCredential(jwt string) (string, error) {
 		return "", fmt.Errorf("failed to marshal credentials: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", fmt.Errorf("failed to write credentials file: %w", err)
 	}
-	if err := os.Chmod(path, 0600); err != nil {
+	if err := os.Chmod(path, 0o600); err != nil {
 		return "", fmt.Errorf("failed to set credentials file permissions: %w", err)
 	}
 

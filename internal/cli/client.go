@@ -711,7 +711,7 @@ func createTar(dir string, filePaths []string) ([]byte, error) {
 
 		hdr := &tar.Header{
 			Name: fp,
-			Mode: 0644,
+			Mode: 0o644,
 			Size: int64(len(data)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {

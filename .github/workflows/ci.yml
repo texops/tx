@@ -9,6 +9,16 @@ permissions:
   contents: read
 
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - shell: bash
+        run: ./scripts/check-fmt.sh
+
   lint:
     runs-on: ubuntu-latest
     steps:

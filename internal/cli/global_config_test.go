@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/texops/tx/internal/cli"
 )
 
@@ -106,8 +107,8 @@ func TestCredentialsFilePath(t *testing.T) {
 func TestResolveAuth(t *testing.T) {
 	t.Run("env var wins over everything", func(t *testing.T) {
 		credPath := withTempCredentialsDir(t)
-		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0700))
-		require.NoError(t, os.WriteFile(credPath, []byte("jwt: file-jwt\n"), 0600))
+		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0o700))
+		require.NoError(t, os.WriteFile(credPath, []byte("jwt: file-jwt\n"), 0o600))
 
 		origGet := cli.KeyringGet
 		defer func() { cli.KeyringGet = origGet }()
@@ -127,8 +128,8 @@ func TestResolveAuth(t *testing.T) {
 
 	t.Run("credentials file wins over keyring", func(t *testing.T) {
 		credPath := withTempCredentialsDir(t)
-		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0700))
-		require.NoError(t, os.WriteFile(credPath, []byte("jwt: file-jwt\n"), 0600))
+		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0o700))
+		require.NoError(t, os.WriteFile(credPath, []byte("jwt: file-jwt\n"), 0o600))
 
 		origGet := cli.KeyringGet
 		defer func() { cli.KeyringGet = origGet }()

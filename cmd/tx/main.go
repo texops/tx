@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	flags "github.com/jessevdk/go-flags"
+
 	"github.com/texops/tx/internal/cli"
 )
 

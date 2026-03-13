@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/texops/tx/internal/cli"
 )
 
@@ -34,8 +35,8 @@ func TestCollectFiles(t *testing.T) {
 		dir := t.TempDir()
 		paperContent := []byte("\\documentclass{article}")
 		refsContent := []byte("@article{foo}")
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), paperContent, 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "refs.bib"), refsContent, 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), paperContent, 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "refs.bib"), refsContent, 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -50,11 +51,11 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("respects .gitignore patterns", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\nbuild/\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux content"), 0600))
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "build"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "build", "output.pdf"), []byte("pdf"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\nbuild/\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux content"), 0o600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "build"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "build", "output.pdf"), []byte("pdf"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -69,10 +70,10 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("excludes .git and .texops.yaml", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("version: 2021"), 0600))
-		require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("git config"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("version: 2021"), 0o600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("git config"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -85,9 +86,9 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("collects files from subdirectories", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "chapters"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tex"), []byte("main"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "chapters", "intro.tex"), []byte("intro"), 0600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "chapters"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tex"), []byte("main"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "chapters", "intro.tex"), []byte("intro"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -107,9 +108,9 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("root .txignore excludes files", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log data"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log data"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -123,11 +124,11 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("txignore works alongside gitignore", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log data"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux data"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log data"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -142,12 +143,12 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("nested txignore in subdirectory excludes files in that subdirectory", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "figures"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.psd\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.psd"), []byte("root psd"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "diagram.psd"), []byte("psd data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "diagram.png"), []byte("png data"), 0600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "figures"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.psd\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.psd"), []byte("root psd"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "diagram.psd"), []byte("psd data"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "diagram.png"), []byte("png data"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -163,11 +164,11 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("nested txignore does not affect parent directories", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "figures"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.tmp\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "root.tmp"), []byte("tmp data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "sketch.tmp"), []byte("tmp data"), 0600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "figures"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.tmp\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "root.tmp"), []byte("tmp data"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "sketch.tmp"), []byte("tmp data"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -182,10 +183,10 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("txignore file itself is excluded from collection", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0600))
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "figures"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.psd\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0o600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "figures"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.psd\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -200,13 +201,13 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("child txignore negation overrides parent txignore", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.tmp\n"), 0600))
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "data"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", ".txignore"), []byte("*.tmp\n!keep.tmp\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.tmp"), []byte("tmp data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "scratch.tmp"), []byte("scratch"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "keep.tmp"), []byte("important"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.tmp\n"), 0o600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "data"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", ".txignore"), []byte("*.tmp\n!keep.tmp\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.tmp"), []byte("tmp data"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "scratch.tmp"), []byte("scratch"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "keep.tmp"), []byte("important"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -222,14 +223,14 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("child negation-only txignore overrides parent ignore", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.tmp\n"), 0600))
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "data"), 0750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.tmp\n"), 0o600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "data"), 0o750))
 		// Child has ONLY a negation rule, no positive rules
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", ".txignore"), []byte("!keep.tmp\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.tmp"), []byte("tmp data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "scratch.tmp"), []byte("scratch"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "keep.tmp"), []byte("important"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", ".txignore"), []byte("!keep.tmp\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.tmp"), []byte("tmp data"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "scratch.tmp"), []byte("scratch"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "keep.tmp"), []byte("important"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -248,7 +249,7 @@ func TestCollectFiles(t *testing.T) {
 			t.Skip("chmod 0000 has no effect when running as root")
 		}
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0000))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0o000))
 
 		_, err := cli.CollectFiles(dir)
 		assert.Error(t, err, "should return error when .txignore exists but cannot be read")
@@ -256,10 +257,10 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("txignore cannot un-ignore gitignore exclusions", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("!paper.aux\n"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("!paper.aux\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux data"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -273,10 +274,10 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("directory exclusion via txignore", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("drafts/\n"), 0600))
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "drafts"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "drafts", "old.tex"), []byte("old content"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("drafts/\n"), 0o600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "drafts"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "drafts", "old.tex"), []byte("old content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)
@@ -290,9 +291,9 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("populates Size for all files", func(t *testing.T) {
 		dir := t.TempDir()
-		require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tex"), []byte("hello"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "b.tex"), []byte("world!"), 0600))
+		require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tex"), []byte("hello"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "b.tex"), []byte("world!"), 0o600))
 
 		files, err := cli.CollectFiles(dir)
 		require.NoError(t, err)

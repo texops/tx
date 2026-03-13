@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/texops/tx/internal/cli"
 )
 
@@ -590,7 +591,7 @@ documents:
   - name: paper
     main: paper.tex
 `
-		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(content), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(content), 0o600))
 
 		config, err := cli.LoadConfig(dir)
 		require.NoError(t, err)

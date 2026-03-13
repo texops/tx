@@ -455,7 +455,7 @@ func initProject(dir, texlive, compiler, mainFallback string, ui *UI) error {
 	}
 
 	configContent := generateConfigYAML(projectKey, texlive, compiler, selected)
-	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte(configContent), 0o600); err != nil {
 		return fmt.Errorf("failed to write .texops.yaml: %w", err)
 	}
 
@@ -768,7 +768,7 @@ func buildDocument(ui *UI, inst *InstanceClient, projectID, dir string, doc Docu
 		compileElapsed := time.Since(compileStart)
 		ui.Success(fmt.Sprintf("Build complete (%.1fs)", compileElapsed.Seconds()))
 		outputPath := filepath.Join(dir, doc.Output)
-		if err := os.MkdirAll(filepath.Dir(outputPath), 0750); err != nil {
+		if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
 			return docResult{Name: doc.Name, Output: doc.Output, Err: fmt.Errorf("cannot create output directory: %w", err)}
 		}
 		if result.BuildID == "" {

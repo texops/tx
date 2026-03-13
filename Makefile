@@ -1,7 +1,7 @@
 .PHONY: fmt lint test build
 
 fmt:
-	go fmt ./...
+	./scripts/make-fmt.sh
 
 lint:
 	./scripts/install-golangci-lint.sh

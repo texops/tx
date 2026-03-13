@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/texops/tx/internal/cli"
 )
 
@@ -258,7 +259,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 		defer srv.Close()
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0o600))
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
@@ -289,7 +290,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 		defer srv.Close()
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "test.tex"), []byte("\\documentclass{article}"), 0o600))
 
 		var progressCalls []int64
 		client := cli.NewInstanceClient(srv.URL, "jwt")
@@ -762,7 +763,7 @@ func TestE2E_TwoClients(t *testing.T) {
 		assert.Len(t, syncResult.Missing, 1)
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}"), 0o600))
 		err = inst.Upload(project.ID, dir, syncResult.Missing, nil)
 		require.NoError(t, err)
 

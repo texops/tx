@@ -16,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/texops/tx/internal/cli"
 )
 
@@ -231,9 +232,9 @@ func TestDiscoverDocuments(t *testing.T) {
 \begin{document}
 Hello
 \end{document}
-`), 0600)
+`), 0o600)
 		os.WriteFile(filepath.Join(dir, "helper.tex"), []byte(`\newcommand{\foo}{bar}
-`), 0600) // no \documentclass
+`), 0o600) // no \documentclass
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -244,9 +245,9 @@ Hello
 
 	t.Run("finds files in nested directories", func(t *testing.T) {
 		dir := t.TempDir()
-		os.MkdirAll(filepath.Join(dir, "slides"), 0750)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0600)
+		os.MkdirAll(filepath.Join(dir, "slides"), 0o750)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -269,10 +270,10 @@ Hello
 
 	t.Run("handles duplicate names with suffix", func(t *testing.T) {
 		dir := t.TempDir()
-		os.MkdirAll(filepath.Join(dir, "v1"), 0750)
-		os.MkdirAll(filepath.Join(dir, "v2"), 0750)
-		os.WriteFile(filepath.Join(dir, "v1", "main.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "v2", "main.tex"), []byte(`\documentclass{article}`), 0600)
+		os.MkdirAll(filepath.Join(dir, "v1"), 0o750)
+		os.MkdirAll(filepath.Join(dir, "v2"), 0o750)
+		os.WriteFile(filepath.Join(dir, "v1", "main.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "v2", "main.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -296,10 +297,10 @@ Hello
 		//   main_2.tex   -> "main_2" (unique stem, reserved in pass 1)
 		//   sub/main.tex -> "main_3" (suffixed, skipping reserved "main_2")
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "main.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "main_2.tex"), []byte(`\documentclass{article}`), 0600)
-		os.MkdirAll(filepath.Join(dir, "sub"), 0750)
-		os.WriteFile(filepath.Join(dir, "sub", "main.tex"), []byte(`\documentclass{article}`), 0600)
+		os.WriteFile(filepath.Join(dir, "main.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "main_2.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.MkdirAll(filepath.Join(dir, "sub"), 0o750)
+		os.WriteFile(filepath.Join(dir, "sub", "main.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -331,12 +332,12 @@ Hello
 		// c/main_2.tex, d/main_2.tex -> stems "main_2" (x2)
 		dir := t.TempDir()
 		for _, sub := range []string{"a", "b", "c", "d"} {
-			os.MkdirAll(filepath.Join(dir, sub), 0750)
+			os.MkdirAll(filepath.Join(dir, sub), 0o750)
 		}
-		os.WriteFile(filepath.Join(dir, "a", "main.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "b", "main.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "c", "main_2.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "d", "main_2.tex"), []byte(`\documentclass{article}`), 0600)
+		os.WriteFile(filepath.Join(dir, "a", "main.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "b", "main.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "c", "main_2.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "d", "main_2.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -364,10 +365,10 @@ Hello
 
 	t.Run("respects gitignore", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("build/\n"), 0600)
-		os.MkdirAll(filepath.Join(dir, "build"), 0750)
-		os.WriteFile(filepath.Join(dir, "build", "output.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
+		os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("build/\n"), 0o600)
+		os.MkdirAll(filepath.Join(dir, "build"), 0o750)
+		os.WriteFile(filepath.Join(dir, "build", "output.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -377,9 +378,9 @@ Hello
 
 	t.Run("respects txignore", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, ".txignore"), []byte("draft.tex\n"), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "draft.tex"), []byte(`\documentclass{article}`), 0600)
+		os.WriteFile(filepath.Join(dir, ".txignore"), []byte("draft.tex\n"), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "draft.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -389,7 +390,7 @@ Hello
 
 	t.Run("returns empty slice when no tex files", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Hello"), 0600)
+		os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Hello"), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -398,7 +399,7 @@ Hello
 
 	t.Run("skips tex files without documentclass", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "macros.tex"), []byte(`\newcommand{\foo}{bar}`), 0600)
+		os.WriteFile(filepath.Join(dir, "macros.tex"), []byte(`\newcommand{\foo}{bar}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -407,7 +408,7 @@ Hello
 
 	t.Run("root-level file has empty directory", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "thesis.tex"), []byte(`\documentclass{report}`), 0600)
+		os.WriteFile(filepath.Join(dir, "thesis.tex"), []byte(`\documentclass{report}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -418,8 +419,8 @@ Hello
 
 	t.Run("nested file has correct directory and short main", func(t *testing.T) {
 		dir := t.TempDir()
-		os.MkdirAll(filepath.Join(dir, "chapters", "intro"), 0750)
-		os.WriteFile(filepath.Join(dir, "chapters", "intro", "intro.tex"), []byte(`\documentclass{article}`), 0600)
+		os.MkdirAll(filepath.Join(dir, "chapters", "intro"), 0o750)
+		os.WriteFile(filepath.Join(dir, "chapters", "intro", "intro.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		docs, err := cli.DiscoverDocuments(dir)
 		require.NoError(t, err)
@@ -434,8 +435,8 @@ func TestInitCmd(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
-		os.WriteFile(filepath.Join(dir, "helper.tex"), []byte(`\newcommand{\foo}{bar}`), 0600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "helper.tex"), []byte(`\newcommand{\foo}{bar}`), 0o600)
 
 		ui, buf := testUI()
 		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
@@ -459,9 +460,9 @@ func TestInitCmd(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
-		os.MkdirAll(filepath.Join(dir, "slides"), 0750)
-		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.MkdirAll(filepath.Join(dir, "slides"), 0o750)
+		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		ui, buf := testUI()
 		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
@@ -518,7 +519,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("fails if config already exists", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("existing"), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("existing"), 0o600)
 
 		t.Chdir(dir)
 
@@ -533,9 +534,9 @@ func TestInitCmd(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
-		os.MkdirAll(filepath.Join(dir, "slides"), 0750)
-		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
+		os.MkdirAll(filepath.Join(dir, "slides"), 0o750)
+		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		ui, _ := testUI()
 		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
@@ -567,7 +568,7 @@ func TestInitCmd(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
 
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		ui, _ := testUI()
 		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
@@ -676,8 +677,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
@@ -767,8 +768,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
@@ -807,8 +808,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		mockKeyringForAuth(t, "test-jwt-token")
 		t.Setenv("TX_API_URL", apiSrv.URL)
@@ -832,7 +833,7 @@ documents:
 func TestBuildCmd_AutoInit(t *testing.T) {
 	t.Run("non-TTY returns friendly error when config missing", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
@@ -863,7 +864,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 
 	t.Run("TTY declined returns friendly error", func(t *testing.T) {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		buf := &bytes.Buffer{}
 		in := strings.NewReader("n\n")
@@ -958,8 +959,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, nil, true, false, ui)
@@ -1043,8 +1044,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
@@ -1135,14 +1136,14 @@ documents:
   - name: main
     main: main.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
 
 		// Create a file of the specified size
 		content := make([]byte, fileSize)
 		for i := range content {
 			content[i] = 'x'
 		}
-		os.WriteFile(filepath.Join(dir, "main.tex"), content, 0600)
+		os.WriteFile(filepath.Join(dir, "main.tex"), content, 0o600)
 
 		return dir
 	}
@@ -1311,9 +1312,9 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 		t.Cleanup(func() { cli.NewInstanceClientFn = origNewIC })
 
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0600)
-		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0o600)
 
 		return setupResult{
 			dir:           dir,
@@ -1410,7 +1411,7 @@ documents:
     main: paper.tex
 `
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(config), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(config), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, []string{"nonexistent"}, false, false, ui)
@@ -1476,8 +1477,8 @@ documents:
 `
 		s := multiDocSetup(t, config, "")
 		// Create subdirectory file so the project has the right structure
-		os.MkdirAll(filepath.Join(s.dir, "chapters", "paper"), 0750)
-		os.WriteFile(filepath.Join(s.dir, "chapters", "paper", "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0600)
+		os.MkdirAll(filepath.Join(s.dir, "chapters", "paper"), 0o750)
+		os.WriteFile(filepath.Join(s.dir, "chapters", "paper", "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0o600)
 
 		ui, buf := testUI()
 		err := cli.RunBuild(s.dir, nil, false, false, ui)
@@ -1577,8 +1578,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
@@ -1671,9 +1672,9 @@ documents:
     main: slides.tex
     compiler: lualatex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0600)
-		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0o600)
+		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
@@ -1760,8 +1761,8 @@ documents:
   - name: paper
     main: paper.tex
 `
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0600)
-		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0600)
+		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
+		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
 		err := cli.RunBuild(dir, nil, false, false, ui)
