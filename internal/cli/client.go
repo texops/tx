@@ -95,6 +95,10 @@ func NewAPIClient(baseURL, apiKey string) *APIClient {
 	}
 }
 
+func NewUnauthenticatedAPIClient(baseURL string) *APIClient {
+	return NewAPIClient(baseURL, "")
+}
+
 func (c *APIClient) SetHTTPClient(hc *http.Client) {
 	c.httpClient = hc
 }
@@ -168,10 +172,6 @@ func (c *APIClient) GetSession(projectID, distributionVersion string) (SessionRe
 		return SessionResponse{}, err
 	}
 	return result, nil
-}
-
-func NewUnauthenticatedAPIClient(baseURL string) *APIClient {
-	return NewAPIClient(baseURL, "")
 }
 
 func (c *APIClient) RequestDeviceCode() (DeviceCodeResponse, error) {
@@ -314,7 +314,7 @@ type APITokenListItem struct {
 }
 
 func (c *APIClient) CreateAPIToken(name string, expiresIn *int64) (APITokenResponse, error) {
-	payload := map[string]interface{}{"name": name}
+	payload := map[string]any{"name": name}
 	if expiresIn != nil {
 		payload["expires_in"] = *expiresIn
 	}
@@ -522,7 +522,7 @@ func (c *InstanceClient) UploadRaw(projectID string, tarData []byte) error {
 }
 
 func (c *InstanceClient) BuildWithArgs(projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"main":                 main,
 		"distribution_version": distVersion,
 	}
@@ -563,7 +563,7 @@ func (c *InstanceClient) BuildWithArgs(projectID, main, directory, distVersion, 
 }
 
 func (c *InstanceClient) Build(projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"main":                 main,
 		"distribution_version": distVersion,
 	}

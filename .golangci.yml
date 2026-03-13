@@ -19,17 +19,17 @@ linters:
     - durationcheck
     - embeddedstructfieldcheck
     #- err113  # conflicts with wrapcheck; dynamic error context > sentinels for HTTP/validation
-    #- errcheck  # TODO: fix 30 issues — unchecked error returns
+    - errcheck
     #- errchkjson  # TODO: fix 3 issues — unchecked JSON encoding errors
     - errname
-    #- errorlint  # TODO: fix 2 issues — incorrect error comparison/wrapping [auto-fix]
-    #- exhaustive  # TODO: fix 1 issue — non-exhaustive enum switch
+    - errorlint  # TODO: fix 2 issues — incorrect error comparison/wrapping [auto-fix]
+    - exhaustive
     #- exhaustruct  # fights Go's zero-value semantics; unusable with external types
     - exptostd
     - fatcontext
     #- forbidigo  # CLI entrypoints legitimately print to stdout
     #- forcetypeassert  # TODO: fix 6 issues — type assertions without ok check
-    #- funcorder  # TODO: fix 4 issues — constructor/method ordering
+    - funcorder
     #- funlen  # redundant with gocognit; test functions are naturally long
     - ginkgolinter
     - gocheckcompilerdirectives
@@ -56,7 +56,7 @@ linters:
     - inamedparam
     - ineffassign
     - interfacebloat
-    #- intrange  # TODO: fix 2 issues — use integer range in for loops [auto-fix]
+    - intrange
     - iotamixing
     #- ireturn  # flags interface returns mandated by external APIs and factory patterns
     #- lll  # struct tags and go-flags options can't reasonably be split
@@ -81,7 +81,7 @@ linters:
     - nosprintfhostport
     #- paralleltest  # TODO: fix 50 issues — tests missing t.Parallel()
     #- perfsprint  # TODO: fix 6 issues — faster string formatting alternatives [auto-fix]
-    #- prealloc  # TODO: fix 1 issue — slice preallocation
+    - prealloc
     #- predeclared  # TODO: fix 1 issue — variable shadows predeclared identifier
     - promlinter
     - protogetter
@@ -126,6 +126,7 @@ linters:
         - G302  # "file permissions" — false positive on directory chmod with 0700
         - G304  # "file inclusion via variable" — paths from config, not user input
         - G704  # "SSRF via taint analysis" — URLs built from client config, not user input
+        - G703
     tagliatelle:
       case:
         rules:
@@ -134,14 +135,14 @@ linters:
 
   exclusions:
     rules:
-      - linters: [testpackage]
+      - linters: [ testpackage ]
         path: internal/cli/progress_model_test\.go
-      - linters: [testpackage]
+      - linters: [ testpackage ]
         path: internal/cli/spinner_model_test\.go
-      - linters: [gosec]
+      - linters: [ gosec ]
         text: "G104:"
         path: _test\.go
-      - linters: [gosec]
+      - linters: [ gosec ]
         text: "G101:"
         path: _test\.go
 

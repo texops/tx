@@ -140,7 +140,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 			assert.Equal(t, "texlive:2021", body["distribution_version"])
 
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"instance_url": "https://10.0.0.1:8443",
 				"jwt":          "eyJhbGciOi...",
 				"cache_cold":   true,
@@ -164,7 +164,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 			assert.Equal(t, "texlive:2019", body["distribution_version"])
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"instance_url": "https://10.0.0.2:8443",
 				"jwt":          "jwt-2019",
 				"cache_cold":   false,
@@ -206,7 +206,7 @@ func TestInstanceClient_Sync(t *testing.T) {
 			assert.Len(t, body.Files, 2)
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"missing": []string{"file2.tex"},
 			})
 		}))
@@ -253,7 +253,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 			assert.Equal(t, "test.tex", hdr.Name)
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"stored": 1})
+			json.NewEncoder(w).Encode(map[string]any{"stored": 1})
 		}))
 		defer srv.Close()
 
@@ -284,7 +284,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			io.ReadAll(r.Body)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"stored": 1})
+			json.NewEncoder(w).Encode(map[string]any{"stored": 1})
 		}))
 		defer srv.Close()
 
@@ -307,7 +307,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 
 func TestInstanceClient_Build(t *testing.T) {
 	t.Run("parses SSE stream and returns done event", func(t *testing.T) {
-		doneData, _ := json.Marshal(map[string]interface{}{
+		doneData, _ := json.Marshal(map[string]any{
 			"status":   "success",
 			"pdfUrl":   "/projects/prj_123/builds/bld_abc/output",
 			"build_id": "bld_abc",
@@ -333,7 +333,7 @@ func TestInstanceClient_Build(t *testing.T) {
 	})
 
 	t.Run("handles build failure", func(t *testing.T) {
-		doneData, _ := json.Marshal(map[string]interface{}{
+		doneData, _ := json.Marshal(map[string]any{
 			"status":  "error",
 			"message": "Build failed",
 		})
@@ -488,7 +488,7 @@ func TestAPIClient_RequestDeviceCode(t *testing.T) {
 			assert.Equal(t, "/auth/device-code", r.URL.Path)
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"device_code":      "dc_abc123",
 				"user_code":        "ABCD-1234",
 				"verification_url": "https://texops.example.com/auth/verify",
@@ -533,7 +533,7 @@ func TestAPIClient_PollToken(t *testing.T) {
 			assert.Equal(t, "dc_test", body["device_code"])
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"jwt":        "eyJhbGciOi.test.sig",
 				"expires_at": "2026-03-30T00:00:00Z",
 			})
@@ -580,7 +580,7 @@ func TestAPIClient_RefreshToken(t *testing.T) {
 			assert.Equal(t, "Bearer old-jwt", r.Header.Get("Authorization"))
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"jwt":        "new-jwt-token",
 				"expires_at": "2026-04-30T00:00:00Z",
 			})
@@ -615,7 +615,7 @@ func TestAPIClient_Whoami(t *testing.T) {
 			assert.Equal(t, "Bearer test-jwt", r.Header.Get("Authorization"))
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"user_id":     "usr_abc123",
 				"email":       "user@example.com",
 				"auth_method": "jwt",
@@ -637,7 +637,7 @@ func TestAPIClient_Whoami(t *testing.T) {
 	t.Run("returns whoami response with API token auth (no expiry)", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"user_id":     "usr_abc123",
 				"email":       "",
 				"auth_method": "api_token",
@@ -691,15 +691,15 @@ func TestE2E_TwoClients(t *testing.T) {
 					missing[i] = f.Path
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"missing": missing})
+				json.NewEncoder(w).Encode(map[string]any{"missing": missing})
 
 			case strings.HasSuffix(r.URL.Path, "/upload") && r.Method == "POST":
 				io.ReadAll(r.Body)
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{"stored": 1})
+				json.NewEncoder(w).Encode(map[string]any{"stored": 1})
 
 			case strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST":
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"pdfUrl":   "/projects/prj_test/builds/bld_001/output",
 					"build_id": "bld_001",
@@ -731,7 +731,7 @@ func TestE2E_TwoClients(t *testing.T) {
 
 			case strings.HasSuffix(r.URL.Path, "/session") && r.Method == "POST":
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt-token",
 					"cache_cold":   false,
@@ -786,12 +786,12 @@ func TestE2E_TwoClients(t *testing.T) {
 
 func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 	t.Run("includes directory in JSON payload when non-empty", func(t *testing.T) {
-		var receivedPayload map[string]interface{}
+		var receivedPayload map[string]any
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST" {
 				json.NewDecoder(r.Body).Decode(&receivedPayload)
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"build_id": "bld_001",
 				})
@@ -820,7 +820,7 @@ func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST" {
 				receivedBody, _ = io.ReadAll(r.Body)
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"build_id": "bld_001",
 				})
@@ -844,12 +844,12 @@ func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 
 func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 	t.Run("includes compiler in JSON payload when non-empty", func(t *testing.T) {
-		var receivedPayload map[string]interface{}
+		var receivedPayload map[string]any
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST" {
 				json.NewDecoder(r.Body).Decode(&receivedPayload)
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"build_id": "bld_001",
 				})
@@ -878,7 +878,7 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST" {
 				receivedBody, _ = io.ReadAll(r.Body)
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"build_id": "bld_001",
 				})
@@ -900,12 +900,12 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 	})
 
 	t.Run("includes compiler in BuildWithArgs payload", func(t *testing.T) {
-		var receivedPayload map[string]interface{}
+		var receivedPayload map[string]any
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/build") && r.Method == "POST" {
 				json.NewDecoder(r.Body).Decode(&receivedPayload)
-				doneData, _ := json.Marshal(map[string]interface{}{
+				doneData, _ := json.Marshal(map[string]any{
 					"status":   "success",
 					"build_id": "bld_001",
 				})
@@ -936,14 +936,14 @@ func TestAPIClient_CreateAPIToken(t *testing.T) {
 			assert.Equal(t, "Bearer test-jwt", r.Header.Get("Authorization"))
 			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-			var body map[string]interface{}
+			var body map[string]any
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			assert.Equal(t, "CI prod", body["name"])
 			assert.Equal(t, float64(2592000), body["expires_in"])
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"token":      "texops_token_abcdefghijklmnopqrstuvwxyz1234567890ABCDE",
 				"id":         "tok_01ABCDEF",
 				"name":       "CI prod",
@@ -969,7 +969,7 @@ func TestAPIClient_CreateAPIToken(t *testing.T) {
 
 	t.Run("creates token without expiry", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var body map[string]interface{}
+			var body map[string]any
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			assert.Equal(t, "no-expiry", body["name"])
 			_, hasExpiry := body["expires_in"]
@@ -977,7 +977,7 @@ func TestAPIClient_CreateAPIToken(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"token":      "texops_token_sometoken",
 				"id":         "tok_02ABCDEF",
 				"name":       "no-expiry",
@@ -1030,7 +1030,7 @@ func TestAPIClient_ListAPITokens(t *testing.T) {
 			assert.Equal(t, "Bearer test-jwt", r.Header.Get("Authorization"))
 
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]interface{}{})
+			json.NewEncoder(w).Encode([]any{})
 		}))
 		defer srv.Close()
 
@@ -1045,7 +1045,7 @@ func TestAPIClient_ListAPITokens(t *testing.T) {
 		lastUsedAt := "2026-02-28T12:00:00Z"
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]map[string]interface{}{
+			json.NewEncoder(w).Encode([]map[string]any{
 				{
 					"id":           "tok_01",
 					"name":         "CI prod",
