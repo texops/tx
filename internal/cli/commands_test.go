@@ -600,6 +600,46 @@ func TestInitCmd(t *testing.T) {
 		_, statErr := os.Stat(filepath.Join(dir, ".texops.yaml"))
 		assert.True(t, os.IsNotExist(statErr), ".texops.yaml should not be created for invalid compiler")
 	})
+
+	t.Run("non-TTY with empty texlive and compiler uses defaults", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		ui, buf := testUI()
+		cmd := &cli.InitCmd{Main: "main.tex", UI: ui}
+		err := cmd.Execute(nil)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
+		require.NoError(t, err)
+		content := string(data)
+		assert.Contains(t, content, `texlive: "texlive:2025"`)
+		assert.Contains(t, content, `compiler: "pdflatex"`)
+		assert.Contains(t, content, `main: "main.tex"`)
+		assert.Contains(t, buf.String(), "Created .texops.yaml")
+	})
+
+	t.Run("explicit flags skip interactive selection", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithOptions(buf, true, strings.NewReader(""))
+		cmd := &cli.InitCmd{Texlive: "texlive:2023", Compiler: "xelatex", Main: "main.tex", UI: ui}
+		err := cmd.Execute(nil)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
+		require.NoError(t, err)
+		content := string(data)
+		assert.Contains(t, content, `texlive: "texlive:2023"`)
+		assert.Contains(t, content, `compiler: "xelatex"`)
+
+		config, err := cli.ParseConfig(content)
+		require.NoError(t, err)
+		assert.Equal(t, "texlive:2023", config.Texlive)
+		assert.Equal(t, "xelatex", config.Compiler)
+	})
 }
 
 func TestBuildCmd(t *testing.T) {
@@ -844,10 +884,11 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 	t.Run("TTY prompts and runs init on confirm", func(t *testing.T) {
 		dir := t.TempDir()
 		// No .tex files with \documentclass — init falls back to main.tex default.
+		// outIsTTY=true so Confirm prompt works; stdinIsTTY=false so selectors use defaults.
 
 		buf := &bytes.Buffer{}
 		in := strings.NewReader("y\n")
-		ui := cli.NewUIWithOptions(buf, true, in)
+		ui := cli.NewUIWithTTYOptions(buf, true, false, in)
 
 		// Build will init then fail on auth — that's fine, we just check init happened.
 		err := cli.RunBuild(dir, nil, false, false, ui)

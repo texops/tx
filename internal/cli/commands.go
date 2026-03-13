@@ -74,8 +74,8 @@ type LoginCmd struct {
 }
 
 type InitCmd struct {
-	Texlive  string `long:"texlive" default:"texlive:2021" description:"TexLive distribution version"`
-	Compiler string `long:"compiler" default:"pdflatex" description:"LaTeX compiler (pdflatex, xelatex, lualatex, latex, platex, uplatex)"`
+	Texlive  string `long:"texlive" description:"TexLive distribution version"`
+	Compiler string `long:"compiler" description:"LaTeX compiler (pdflatex, xelatex, lualatex, latex, platex, uplatex)"`
 	Main     string `long:"main" default:"main.tex" description:"Main TeX file (fallback when no .tex files discovered)"`
 	UI       *UI    `no-flag:"true"`
 }
@@ -407,15 +407,15 @@ func (cmd *InitCmd) Execute(args []string) error {
 		return err
 	}
 
-	if !isValidCompiler(cmd.Compiler) {
-		return fmt.Errorf("invalid compiler %q: allowed values are %s", cmd.Compiler, strings.Join(AllowedCompilers, ", "))
-	}
-
 	configPath := filepath.Join(dir, ".texops.yaml")
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf(".texops.yaml already exists")
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("cannot check .texops.yaml: %w", err)
+	}
+
+	if cmd.Compiler != "" && !isValidCompiler(cmd.Compiler) {
+		return fmt.Errorf("invalid compiler %q: allowed values are %s", cmd.Compiler, strings.Join(AllowedCompilers, ", "))
 	}
 
 	return initProject(dir, cmd.Texlive, cmd.Compiler, cmd.Main, ui)
@@ -424,6 +424,30 @@ func (cmd *InitCmd) Execute(args []string) error {
 func initProject(dir, texlive, compiler, mainFallback string, ui *UI) error {
 	configPath := filepath.Join(dir, ".texops.yaml")
 
+	if texlive == "" {
+		if ui.IsInteractive() {
+			idx, err := ui.SelectOne("TexLive version:", TexliveVersions)
+			if err != nil {
+				return fmt.Errorf("TexLive selection failed: %w", err)
+			}
+			texlive = TexliveVersions[idx]
+		} else {
+			texlive = TexliveVersions[0]
+		}
+	}
+
+	if compiler == "" {
+		if ui.IsInteractive() {
+			idx, err := ui.SelectOne("Compiler:", AllowedCompilers)
+			if err != nil {
+				return fmt.Errorf("compiler selection failed: %w", err)
+			}
+			compiler = AllowedCompilers[idx]
+		} else {
+			compiler = defaultCompiler
+		}
+	}
+
 	discovered, err := DiscoverDocuments(dir)
 	if err != nil {
 		return fmt.Errorf("failed to discover documents: %w", err)
@@ -431,7 +455,7 @@ func initProject(dir, texlive, compiler, mainFallback string, ui *UI) error {
 
 	var selected []Document
 	if len(discovered) > 0 {
-		if ui.IsTTY() {
+		if ui.IsInteractive() {
 			selected, err = ui.SelectDocuments(discovered)
 			if err != nil {
 				return fmt.Errorf("document selection failed: %w", err)
@@ -516,7 +540,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 		if !confirmed {
 			return errInitDeclined
 		}
-		if initErr := initProject(dir, "texlive:2021", "pdflatex", "main.tex", ui); initErr != nil {
+		if initErr := initProject(dir, "", "", "main.tex", ui); initErr != nil {
 			return initErr
 		}
 		configData, err = os.ReadFile(configPath)

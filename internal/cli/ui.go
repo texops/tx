@@ -29,12 +29,13 @@ type uiStyles struct {
 }
 
 type UI struct {
-	isTTY  bool
-	out    io.Writer
-	ttyOut io.Writer // original *os.File for Bubble Tea (needs Fd() for TTY detection)
-	errOut io.Writer
-	in     io.Reader
-	styles uiStyles
+	isTTY      bool
+	stdinIsTTY bool
+	out        io.Writer
+	ttyOut     io.Writer // original *os.File for Bubble Tea (needs Fd() for TTY detection)
+	errOut     io.Writer
+	in         io.Reader
+	styles     uiStyles
 }
 
 func newStyles(hasDarkBG bool, r *lipgloss.Renderer) uiStyles {
@@ -64,6 +65,7 @@ func NewUI(out io.Writer) *UI {
 	if f, ok := out.(*os.File); ok {
 		isTTY = isatty.IsTerminal(f.Fd())
 	}
+	stdinIsTTY := isatty.IsTerminal(os.Stdin.Fd())
 
 	hasDarkBG := true // safe default for non-TTY
 	if isTTY {
@@ -71,12 +73,13 @@ func NewUI(out io.Writer) *UI {
 	}
 
 	return &UI{
-		isTTY:  isTTY,
-		out:    out,
-		ttyOut: out, // preserve original writer for Bubble Tea TTY detection
-		errOut: os.Stderr,
-		in:     os.Stdin,
-		styles: newStyles(hasDarkBG, nil),
+		isTTY:      isTTY,
+		stdinIsTTY: stdinIsTTY,
+		out:        out,
+		ttyOut:     out, // preserve original writer for Bubble Tea TTY detection
+		errOut:     os.Stderr,
+		in:         os.Stdin,
+		styles:     newStyles(hasDarkBG, nil),
 	}
 }
 
@@ -84,20 +87,35 @@ func NewUI(out io.Writer) *UI {
 // Used in tests to simulate TTY/non-TTY behavior.
 // Error output goes to out for easy test capture.
 func NewUIWithOptions(out io.Writer, isTTY bool, in io.Reader) *UI {
+	return newUIWithOptions(out, isTTY, isTTY, in)
+}
+
+// NewUIWithTTYOptions creates a UI with separate output-TTY and stdin-TTY flags.
+// Use this when testing code that distinguishes IsTTY() from IsInteractive().
+func NewUIWithTTYOptions(out io.Writer, outIsTTY, stdinIsTTY bool, in io.Reader) *UI {
+	return newUIWithOptions(out, outIsTTY, stdinIsTTY, in)
+}
+
+func newUIWithOptions(out io.Writer, isTTY, stdinIsTTY bool, in io.Reader) *UI {
 	r := lipgloss.NewRenderer(out)
 	r.SetColorProfile(termenv.TrueColor)
 	return &UI{
-		isTTY:  isTTY,
-		out:    out,
-		ttyOut: out,
-		errOut: out,
-		in:     in,
-		styles: newStyles(true, r),
+		isTTY:      isTTY,
+		stdinIsTTY: stdinIsTTY,
+		out:        out,
+		ttyOut:     out,
+		errOut:     out,
+		in:         in,
+		styles:     newStyles(true, r),
 	}
 }
 
 func (ui *UI) IsTTY() bool {
 	return ui.isTTY
+}
+
+func (ui *UI) IsInteractive() bool {
+	return ui.isTTY && ui.stdinIsTTY
 }
 
 func (ui *UI) Out() io.Writer {

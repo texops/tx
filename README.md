@@ -24,7 +24,7 @@ tx token delete [name]          # Delete an API token
 ### Getting started
 
 1. Run `tx login` to authenticate.
-2. In your LaTeX project directory, run `tx init` to create a `.texops.yaml` config file. This auto-discovers `.tex` files with `\documentclass` and lets you select which documents to build.
+2. In your LaTeX project directory, run `tx init` to create a `.texops.yaml` config file. This interactively prompts for TexLive version and compiler, auto-discovers `.tex` files with `\documentclass`, and lets you select which documents to build. Use `--texlive` and `--compiler` flags to skip interactive prompts.
 3. Run `tx build` to compile your documents remotely. The first build creates the project on TexOps; subsequent builds use incremental file sync for speed.
 
 ### Configuration
@@ -32,7 +32,7 @@ tx token delete [name]          # Delete an API token
 Project settings are stored in `.texops.yaml`:
 
 - `project_key` — unique identifier (safe to commit)
-- `texlive` — TexLive version (e.g. `texlive:2021`)
+- `texlive` — TexLive version (e.g. `texlive:2025`)
 - `compiler` — LaTeX compiler: `pdflatex` (default), `xelatex`, `lualatex`, `latex`, `platex`, `uplatex`
 - `documents` — list of documents to build
 
