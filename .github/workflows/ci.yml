@@ -29,6 +29,13 @@ jobs:
       - shell: bash
         run: make lint
 
+  man-text:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: ./scripts/check-man-text.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

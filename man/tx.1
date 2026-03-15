@@ -1,0 +1,446 @@
+.Dd March 15, 2026
+.Dt TX 1
+.Os
+.Sh NAME
+.Nm tx
+.Nd TexOps CLI to build LaTeX documents in the cloud
+.Sh SYNOPSIS
+.Nm
+.Cm login
+.Nm
+.Cm init
+.Op Fl -texlive Ar version
+.Op Fl -compiler Ar name
+.Op Fl -main Ar file
+.Nm
+.Cm build
+.Op Fl -no-cache
+.Op Fl y | Fl -yes
+.Op Ar name ...
+.Nm
+.Cm status
+.Nm
+.Cm token create
+.Op Fl -name Ar name
+.Op Fl -expires-in Ar duration
+.Op Fl -no-expiry
+.Nm
+.Cm token list
+.Nm
+.Cm token delete
+.Op Ar name
+.Nm
+.Cm version
+.Nm
+.Fl -version
+.Sh DESCRIPTION
+.Nm
+is the command-line client for TexOps, a cloud service that compiles LaTeX
+documents.
+It uploads project files, triggers remote builds, and downloads the resulting
+PDFs.
+Both interactive use on a developer workstation and headless use in CI
+pipelines are supported.
+.Sh GETTING STARTED
+.Bl -enum
+.It
+Authenticate with the TexOps service:
+.Pp
+.Dl $ tx login
+.It
+Inside a LaTeX project directory, create a
+.Pa .texops.yaml
+configuration file and commit it to version control:
+.Pp
+.Dl $ tx init
+.It
+Build the project:
+.Pp
+.Dl $ tx build
+.El
+.Pp
+For CI pipelines, commit
+.Pa .texops.yaml
+to the repository and set the
+.Ev TX_API_TOKEN
+environment variable instead of running
+.Cm login .
+.Sh COMMANDS
+.Ss login
+Authenticate with the TexOps service using the device code flow.
+A one-time code is displayed and the verification URL is opened in a browser
+automatically when possible.
+After authorization completes in the browser, the session JWT is
+stored locally.
+.Ss init
+Create a
+.Pa .texops.yaml
+configuration file in the current directory.
+Recursively discovers
+.Pa .tex
+files containing
+.Ql \edocumentclass .
+In interactive mode, discovered documents are presented for selection.
+In non-interactive mode, all discovered documents are included automatically.
+.Pp
+The interactive prompts for TeX Live version, compiler, and documents
+require both stdin and stdout to be a TTY.
+When either is not a TTY, the defaults are used:
+.Cm texlive:2021 ,
+.Cm pdflatex
+as the compiler, and all discovered documents.
+.Pp
+Flags:
+.Bl -tag -width Ds
+.It Fl -texlive Ar version
+TeX Live distribution version
+.Pq e.g.\& Qq texlive:2021 .
+Skips the interactive version prompt.
+.It Fl -compiler Ar name
+LaTeX compiler.
+Must be one of:
+.Cm pdflatex , xelatex , lualatex , latex , platex , uplatex .
+Skips the interactive compiler prompt.
+.It Fl -main Ar file
+Used as the main TeX file only when recursive discovery finds no documents
+.Pq i.e.\& no .tex files containing Ql \edocumentclass .
+This flag does not override discovered documents; it is only used as a
+fallback.
+Defaults to
+.Pa main.tex .
+.El
+.Ss build
+Build one or more documents defined in
+.Pa .texops.yaml .
+Positional arguments select documents by name; when none are given, all
+documents are built.
+On success, each built PDF is downloaded to the local output path defined in
+.Pa .texops.yaml .
+.Pp
+If
+.Pa .texops.yaml
+does not exist and stdout is a TTY, an interactive prompt offers to run
+.Cm init
+first.
+When stdout is not a TTY, the build fails with an error.
+.Pp
+Flags:
+.Bl -tag -width Ds
+.It Fl -no-cache
+Rebuild without using the remote build cache.
+.It Fl y , Fl -yes
+Skip the upload size confirmation prompt.
+This prompt is shown when the combined size of files to upload exceeds 50 MB.
+When stdout is not a TTY, confirmations default to yes.
+.El
+.Ss status
+Show authentication status including email
+.Pq when available ,
+authentication method, and token expiry.
+Always exits 0, even when not authenticated or the session has expired
+.Pq see EXIT STATUS .
+.Ss token create
+Create a new API token for use in CI pipelines or other non-interactive
+environments.
+The token value is displayed once and cannot be retrieved again.
+.Pp
+Flags:
+.Bl -tag -width Ds
+.It Fl -name Ar name
+Name for the token.
+Required in non-interactive mode; prompted interactively otherwise.
+.It Fl -expires-in Ar duration
+Token expiry duration.
+A positive integer followed by
+.Ql d
+.Pq days
+or
+.Ql y
+.Pq years ;
+maximum 10 years.
+For example:
+.Ql 30d ,
+.Ql 90d ,
+.Ql 1y .
+Mutually exclusive with
+.Fl -no-expiry .
+One of
+.Fl -expires-in
+or
+.Fl -no-expiry
+is required in non-interactive mode.
+.It Fl -no-expiry
+Create a token that does not expire.
+Mutually exclusive with
+.Fl -expires-in .
+.El
+.Ss token list
+List all API tokens with their name, prefix, expiry, last-used date, and
+creation date.
+.Ss token delete
+Delete an API token.
+When a
+.Ar name
+argument is given, the matching token is deleted after confirmation.
+When stdout is not a TTY, this confirmation defaults to yes.
+When no argument is given and stdout is a TTY, an interactive selection list
+is presented; if there are no tokens, a message is shown instead.
+In non-interactive mode, a token name argument is required.
+.Ss version
+Print the
+.Nm
+version and exit.
+The same output is available via
+.Nm Fl -version .
+.Sh CONFIGURATION
+The project configuration file
+.Pa .texops.yaml
+is created by
+.Cm tx init
+with a minimal set of keys:
+.Cm project_key , texlive , compiler ,
+and a
+.Cm documents
+list where each entry has
+.Cm name
+and
+.Cm main .
+Additional keys described below are optional and can be added manually.
+.Ss Top-level keys
+.Bl -tag -width Ds
+.It Cm project_key
+Unique identifier for the project.
+Generated automatically by
+.Cm tx init .
+If omitted,
+.Cm tx build
+generates one and writes it back to
+.Pa .texops.yaml
+before building.
+.It Cm texlive
+.Pq required
+TeX Live distribution version
+.Pq e.g.\& Qq texlive:2021 .
+Must be a non-empty string.
+Not validated against a fixed set of versions.
+.It Cm compiler
+LaTeX compiler.
+Must be one of:
+.Cm pdflatex , xelatex , lualatex , latex , platex , uplatex .
+Defaults to
+.Cm pdflatex
+if omitted.
+.It Cm api_url
+Override the API endpoint URL.
+.It Cm documents
+.Pq required
+A non-empty list of document definitions.
+.El
+.Ss Document keys
+.Bl -tag -width Ds
+.It Cm name
+.Pq required
+Unique identifier for the document.
+.It Cm main
+.Pq required
+Path to the main TeX file, relative to
+.Cm directory
+.Pq or the project root if Cm directory No is not set .
+Must not escape the project root.
+.It Cm directory
+Subdirectory containing the document sources.
+When set, the build runs relative to this directory.
+.It Cm output
+Output PDF path.
+Defaults to
+.Cm main
+with a
+.Pa .pdf
+extension.
+For example, if
+.Cm directory
+is
+.Pa sub
+and
+.Cm main
+is
+.Pa doc.tex ,
+the default output path is
+.Pa sub/doc.pdf .
+Must not escape the project root.
+.It Cm compiler
+Per-document compiler override.
+.It Cm texlive
+Per-document TeX Live version override.
+.El
+.Ss Validation rules
+.Bl -bullet
+.It
+.Cm texlive
+is required and must be a non-empty string.
+.It
+.Cm documents
+is required and must be a non-empty list of mappings.
+.It
+Each document requires a unique
+.Cm name
+and a non-empty
+.Cm main .
+.It
+.Cm main , directory ,
+and
+.Cm output
+must not escape the project root.
+.It
+Document-level
+.Cm compiler
+and
+.Cm texlive
+override the top-level values.
+.It
+Configs with a top-level
+.Cm main
+key
+.Pq old format
+are rejected with a migration hint.
+.El
+.Ss Example configuration
+.Bd -literal -offset indent
+project_key: "aBcDeFgHiJkLmNoPqRsT12"
+texlive: "texlive:2021"
+compiler: "xelatex"
+
+documents:
+  - name: "paper"
+    main: "paper.tex"
+  - name: "appendix"
+    main: "main.tex"
+    directory: "appendix"
+    output: "appendix.pdf"
+    compiler: "lualatex"
+    texlive: "texlive:2019"
+.Ed
+.Sh AUTHENTICATION
+.Nm
+looks up credentials in the following order:
+.Bl -enum
+.It
+The
+.Ev TX_API_TOKEN
+environment variable.
+.It
+A JWT in the credentials file.
+.It
+A JWT in the system keyring.
+.El
+.Pp
+.Cm tx login
+stores the session JWT in the system keyring.
+If the keyring is unavailable, the credentials file is used as a fallback.
+.Pp
+For CI pipelines, create an API token with
+.Cm tx token create
+and set it as
+.Ev TX_API_TOKEN .
+.Sh FILE UPLOADS
+.Bl -bullet
+.It
+.Pa .git/ ,
+.Pa .texops.yaml ,
+and
+.Pa .txignore
+are always excluded from uploads.
+.It
+Only the project-root
+.Pa .gitignore
+is loaded; nested
+.Pa .gitignore
+files are not used.
+.It
+.Pa .txignore
+files can exist in nested directories with local scope; negation patterns
+are supported.
+.It
+Only files the server reports as missing are uploaded, using hash-based
+comparison.
+.El
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev TX_API_TOKEN
+API token for authentication.
+Takes priority over all other credential sources.
+.It Ev TX_API_URL
+Override the API endpoint URL.
+Takes priority over the
+.Cm api_url
+configuration key.
+.It Ev XDG_CONFIG_HOME
+When set to an absolute path, the credentials file is stored at
+.Pa $XDG_CONFIG_HOME/texops/credentials.yaml .
+Relative values are ignored.
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa .texops.yaml
+Project configuration file in the current directory.
+.It Pa .txignore
+File exclusion patterns, similar to
+.Pa .gitignore .
+Can appear in any project subdirectory.
+.It Pa $XDG_CONFIG_HOME/texops/credentials.yaml
+Credentials file when
+.Ev XDG_CONFIG_HOME
+is set to an absolute path.
+.It Pa $HOME/.config/texops/credentials.yaml
+Default credentials file location.
+.El
+.Sh EXIT STATUS
+.Bl -tag -width Ds
+.It 0
+Success, including help and version output.
+.It 1
+Command failure, including parse errors, configuration errors, build failures,
+and runtime errors.
+Note:
+.Cm status
+exits 0 even when not authenticated or the session has expired.
+.El
+.Sh EXAMPLES
+Build a specific document:
+.Pp
+.Dl $ tx build paper
+.Pp
+Rebuild from scratch without cache:
+.Pp
+.Dl $ tx build --no-cache
+.Pp
+Create an API token for CI:
+.Pp
+.Dl $ tx token create --name ci-main --expires-in 90d
+.Pp
+CI pipeline snippet
+.Pq assumes .texops.yaml No is committed :
+.Bd -literal -offset indent
+export TX_API_TOKEN="$TEXOPS_TOKEN"
+tx build --yes
+.Ed
+.Pp
+Multi-document configuration and build:
+.Bd -literal -offset indent
+# .texops.yaml
+project_key: "aBcDeFgHiJkLmNoPqRsT12"
+texlive: "texlive:2021"
+compiler: "pdflatex"
+
+documents:
+  - name: "thesis"
+    main: "thesis.tex"
+  - name: "slides"
+    main: "slides.tex"
+    directory: "presentation"
+    compiler: "xelatex"
+.Ed
+.Pp
+.Dl $ tx build thesis slides
+.Sh SEE ALSO
+.Xr gitignore 5

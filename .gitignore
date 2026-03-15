@@ -8,3 +8,6 @@ dist/
 *.dylib
 *.test
 *.out
+
+# ralphex progress logs
+.ralphex/progress/

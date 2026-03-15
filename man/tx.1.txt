@@ -1,0 +1,314 @@
+TX(1)                       General Commands Manual                      TX(1)
+
+NAME
+     tx – TexOps CLI to build LaTeX documents in the cloud
+
+SYNOPSIS
+     tx login
+     tx init [--texlive version] [--compiler name] [--main file]
+     tx build [--no-cache] [-y | --yes] [name ...]
+     tx status
+     tx token create [--name name] [--expires-in duration] [--no-expiry]
+     tx token list
+     tx token delete [name]
+     tx version
+     tx --version
+
+DESCRIPTION
+     tx is the command-line client for TexOps, a cloud service that compiles
+     LaTeX documents.  It uploads project files, triggers remote builds, and
+     downloads the resulting PDFs.  Both interactive use on a developer
+     workstation and headless use in CI pipelines are supported.
+
+GETTING STARTED
+     1.   Authenticate with the TexOps service:
+
+                $ tx login
+
+     2.   Inside a LaTeX project directory, create a .texops.yaml
+          configuration file and commit it to version control:
+
+                $ tx init
+
+     3.   Build the project:
+
+                $ tx build
+
+     For CI pipelines, commit .texops.yaml to the repository and set the
+     TX_API_TOKEN environment variable instead of running login.
+
+COMMANDS
+   login
+     Authenticate with the TexOps service using the device code flow.  A one-
+     time code is displayed and the verification URL is opened in a browser
+     automatically when possible.  After authorization completes in the
+     browser, the session JWT is stored locally.
+
+   init
+     Create a .texops.yaml configuration file in the current directory.
+     Recursively discovers .tex files containing ‘\documentclass’.  In
+     interactive mode, discovered documents are presented for selection.  In
+     non-interactive mode, all discovered documents are included
+     automatically.
+
+     The interactive prompts for TeX Live version, compiler, and documents
+     require both stdin and stdout to be a TTY.  When either is not a TTY, the
+     defaults are used: texlive:2021, pdflatex as the compiler, and all
+     discovered documents.
+
+     Flags:
+
+     --texlive version
+             TeX Live distribution version (e.g. "texlive:2021").  Skips the
+             interactive version prompt.
+
+     --compiler name
+             LaTeX compiler.  Must be one of: pdflatex, xelatex, lualatex,
+             latex, platex, uplatex.  Skips the interactive compiler prompt.
+
+     --main file
+             Used as the main TeX file only when recursive discovery finds no
+             documents (i.e. no .tex files containing ‘\documentclass’).  This
+             flag does not override discovered documents; it is only used as a
+             fallback.  Defaults to main.tex.
+
+   build
+     Build one or more documents defined in .texops.yaml.  Positional
+     arguments select documents by name; when none are given, all documents
+     are built.  On success, each built PDF is downloaded to the local output
+     path defined in .texops.yaml.
+
+     If .texops.yaml does not exist and stdout is a TTY, an interactive prompt
+     offers to run init first.  When stdout is not a TTY, the build fails with
+     an error.
+
+     Flags:
+
+     --no-cache
+             Rebuild without using the remote build cache.
+
+     -y, --yes
+             Skip the upload size confirmation prompt.  This prompt is shown
+             when the combined size of files to upload exceeds 50 MB.  When
+             stdout is not a TTY, confirmations default to yes.
+
+   status
+     Show authentication status including email (when available),
+     authentication method, and token expiry.  Always exits 0, even when not
+     authenticated or the session has expired (see EXIT STATUS).
+
+   token create
+     Create a new API token for use in CI pipelines or other non-interactive
+     environments.  The token value is displayed once and cannot be retrieved
+     again.
+
+     Flags:
+
+     --name name
+             Name for the token.  Required in non-interactive mode; prompted
+             interactively otherwise.
+
+     --expires-in duration
+             Token expiry duration.  A positive integer followed by ‘d’ (days)
+             or ‘y’ (years); maximum 10 years.  For example: ‘30d’, ‘90d’,
+             ‘1y’.  Mutually exclusive with --no-expiry.  One of --expires-in
+             or --no-expiry is required in non-interactive mode.
+
+     --no-expiry
+             Create a token that does not expire.  Mutually exclusive with
+             --expires-in.
+
+   token list
+     List all API tokens with their name, prefix, expiry, last-used date, and
+     creation date.
+
+   token delete
+     Delete an API token.  When a name argument is given, the matching token
+     is deleted after confirmation.  When stdout is not a TTY, this
+     confirmation defaults to yes.  When no argument is given and stdout is a
+     TTY, an interactive selection list is presented; if there are no tokens,
+     a message is shown instead.  In non-interactive mode, a token name
+     argument is required.
+
+   version
+     Print the tx version and exit.  The same output is available via tx
+     --version.
+
+CONFIGURATION
+     The project configuration file .texops.yaml is created by tx init with a
+     minimal set of keys: project_key, texlive, compiler, and a documents list
+     where each entry has name and main.  Additional keys described below are
+     optional and can be added manually.
+
+   Top-level keys
+     project_key
+             Unique identifier for the project.  Generated automatically by tx
+             init.  If omitted, tx build generates one and writes it back to
+             .texops.yaml before building.
+
+     texlive
+             (required) TeX Live distribution version (e.g. "texlive:2021").
+             Must be a non-empty string.  Not validated against a fixed set of
+             versions.
+
+     compiler
+             LaTeX compiler.  Must be one of: pdflatex, xelatex, lualatex,
+             latex, platex, uplatex.  Defaults to pdflatex if omitted.
+
+     api_url
+             Override the API endpoint URL.
+
+     documents
+             (required) A non-empty list of document definitions.
+
+   Document keys
+     name    (required) Unique identifier for the document.
+
+     main    (required) Path to the main TeX file, relative to directory (or
+             the project root if directory is not set).  Must not escape the
+             project root.
+
+     directory
+             Subdirectory containing the document sources.  When set, the
+             build runs relative to this directory.
+
+     output  Output PDF path.  Defaults to main with a .pdf extension.  For
+             example, if directory is sub and main is doc.tex, the default
+             output path is sub/doc.pdf.  Must not escape the project root.
+
+     compiler
+             Per-document compiler override.
+
+     texlive
+             Per-document TeX Live version override.
+
+   Validation rules
+     •   texlive is required and must be a non-empty string.
+
+     •   documents is required and must be a non-empty list of mappings.
+
+     •   Each document requires a unique name and a non-empty main.
+
+     •   main, directory, and output must not escape the project root.
+
+     •   Document-level compiler and texlive override the top-level values.
+
+     •   Configs with a top-level main key (old format) are rejected with a
+         migration hint.
+
+   Example configuration
+           project_key: "aBcDeFgHiJkLmNoPqRsT12"
+           texlive: "texlive:2021"
+           compiler: "xelatex"
+
+           documents:
+             - name: "paper"
+               main: "paper.tex"
+             - name: "appendix"
+               main: "main.tex"
+               directory: "appendix"
+               output: "appendix.pdf"
+               compiler: "lualatex"
+               texlive: "texlive:2019"
+
+AUTHENTICATION
+     tx looks up credentials in the following order:
+
+     1.   The TX_API_TOKEN environment variable.
+
+     2.   A JWT in the credentials file.
+
+     3.   A JWT in the system keyring.
+
+     tx login stores the session JWT in the system keyring.  If the keyring is
+     unavailable, the credentials file is used as a fallback.
+
+     For CI pipelines, create an API token with tx token create and set it as
+     TX_API_TOKEN.
+
+FILE UPLOADS
+     •   .git/, .texops.yaml, and .txignore are always excluded from uploads.
+
+     •   Only the project-root .gitignore is loaded; nested .gitignore files
+         are not used.
+
+     •   .txignore files can exist in nested directories with local scope;
+         negation patterns are supported.
+
+     •   Only files the server reports as missing are uploaded, using hash-
+         based comparison.
+
+ENVIRONMENT
+     TX_API_TOKEN
+             API token for authentication.  Takes priority over all other
+             credential sources.
+
+     TX_API_URL
+             Override the API endpoint URL.  Takes priority over the api_url
+             configuration key.
+
+     XDG_CONFIG_HOME
+             When set to an absolute path, the credentials file is stored at
+             $XDG_CONFIG_HOME/texops/credentials.yaml.  Relative values are
+             ignored.
+
+FILES
+     .texops.yaml
+             Project configuration file in the current directory.
+
+     .txignore
+             File exclusion patterns, similar to .gitignore.  Can appear in
+             any project subdirectory.
+
+     $XDG_CONFIG_HOME/texops/credentials.yaml
+             Credentials file when XDG_CONFIG_HOME is set to an absolute path.
+
+     $HOME/.config/texops/credentials.yaml
+             Default credentials file location.
+
+EXIT STATUS
+     0       Success, including help and version output.
+
+     1       Command failure, including parse errors, configuration errors,
+             build failures, and runtime errors.  Note: status exits 0 even
+             when not authenticated or the session has expired.
+
+EXAMPLES
+     Build a specific document:
+
+           $ tx build paper
+
+     Rebuild from scratch without cache:
+
+           $ tx build --no-cache
+
+     Create an API token for CI:
+
+           $ tx token create --name ci-main --expires-in 90d
+
+     CI pipeline snippet (assumes .texops.yaml is committed):
+
+           export TX_API_TOKEN="$TEXOPS_TOKEN"
+           tx build --yes
+
+     Multi-document configuration and build:
+
+           # .texops.yaml
+           project_key: "aBcDeFgHiJkLmNoPqRsT12"
+           texlive: "texlive:2021"
+           compiler: "pdflatex"
+
+           documents:
+             - name: "thesis"
+               main: "thesis.tex"
+             - name: "slides"
+               main: "slides.tex"
+               directory: "presentation"
+               compiler: "xelatex"
+
+           $ tx build thesis slides
+
+SEE ALSO
+     gitignore(5)
+
+macOS 15.7                      March 15, 2026                      macOS 15.7

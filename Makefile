@@ -1,4 +1,4 @@
-.PHONY: fmt lint test build
+.PHONY: fmt lint test build man-text
 
 fmt:
 	./scripts/make-fmt.sh
@@ -12,3 +12,6 @@ test:
 
 build:
 	go build -o bin/tx ./cmd/tx
+
+man-text:
+	mandoc -T utf8 man/tx.1 | col -bx > man/tx.1.txt

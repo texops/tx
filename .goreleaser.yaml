@@ -19,6 +19,11 @@ archives:
   - formats:
       - tar.gz
     name_template: "tx_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: LICENSE
+      - src: README.md
+      - src: man/tx.1
+        dst: man/
     format_overrides:
       - goos: windows
         formats:
