@@ -23,7 +23,6 @@ archives:
       - src: LICENSE
       - src: README.md
       - src: man/tx.1
-        dst: man/
     format_overrides:
       - goos: windows
         formats:
