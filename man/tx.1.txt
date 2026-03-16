@@ -223,6 +223,12 @@ AUTHENTICATION
      tx login stores the session JWT in the system keyring.  If the keyring is
      unavailable, the credentials file is used as a fallback.
 
+     The credentials file is a YAML file with a single key:
+
+     jwt     The session JWT obtained by tx login.
+
+     The file is created with mode 0600 inside a directory with mode 0700.
+
      For CI pipelines, create an API token with tx token create and set it as
      TX_API_TOKEN.
 

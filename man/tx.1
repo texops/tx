@@ -338,6 +338,15 @@ A JWT in the system keyring.
 stores the session JWT in the system keyring.
 If the keyring is unavailable, the credentials file is used as a fallback.
 .Pp
+The credentials file is a YAML file with a single key:
+.Bl -tag -width Ds
+.It Cm jwt
+The session JWT obtained by
+.Cm tx login .
+.El
+.Pp
+The file is created with mode 0600 inside a directory with mode 0700.
+.Pp
 For CI pipelines, create an API token with
 .Cm tx token create
 and set it as

@@ -46,5 +46,6 @@ brews:
     license: "MIT"
     install: |
       bin.install "tx"
+      man1.install "man/tx.1"
     test: |
       system "#{bin}/tx", "--version"
