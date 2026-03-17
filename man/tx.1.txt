@@ -317,4 +317,4 @@ EXAMPLES
 SEE ALSO
      gitignore(5)
 
-macOS 15.7                      March 15, 2026                      macOS 15.7
+TexOps                                                                  TexOps

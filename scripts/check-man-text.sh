@@ -9,7 +9,7 @@ cd "$ROOT_DIR"
 
 make man-text
 
-if ! git diff --stat --exit-code man/tx.1.txt; then
+if ! git diff --exit-code man/tx.1.txt; then
   echo ""
   echo "man/tx.1.txt is out of date."
   echo "Please run 'make man-text' locally and commit the changes."
