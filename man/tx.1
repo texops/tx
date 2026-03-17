@@ -15,7 +15,6 @@
 .Nm
 .Cm build
 .Op Fl -no-cache
-.Op Fl y | Fl -yes
 .Op Ar name ...
 .Nm
 .Cm status
@@ -128,10 +127,6 @@ Flags:
 .Bl -tag -width Ds
 .It Fl -no-cache
 Rebuild without using the remote build cache.
-.It Fl y , Fl -yes
-Skip the upload size confirmation prompt.
-This prompt is shown when the combined size of files to upload exceeds 50 MB.
-When stdout is not a TTY, confirmations default to yes.
 .El
 .Ss status
 Show authentication status including email
@@ -431,7 +426,7 @@ CI pipeline snippet
 .Pq assumes .texops.yaml No is committed :
 .Bd -literal -offset indent
 export TX_API_TOKEN="$TEXOPS_TOKEN"
-tx build --yes
+tx build
 .Ed
 .Pp
 Multi-document configuration and build:

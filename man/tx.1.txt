@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
      tx login
      tx init [--texlive version] [--compiler name] [--main file]
-     tx build [--no-cache] [-y | --yes] [name ...]
+     tx build [--no-cache] [name ...]
      tx status
      tx token create [--name name] [--expires-in duration] [--no-expiry]
      tx token list
@@ -86,11 +86,6 @@ COMMANDS
 
      --no-cache
              Rebuild without using the remote build cache.
-
-     -y, --yes
-             Skip the upload size confirmation prompt.  This prompt is shown
-             when the combined size of files to upload exceeds 50 MB.  When
-             stdout is not a TTY, confirmations default to yes.
 
    status
      Show authentication status including email (when available),
@@ -295,7 +290,7 @@ EXAMPLES
      CI pipeline snippet (assumes .texops.yaml is committed):
 
            export TX_API_TOKEN="$TEXOPS_TOKEN"
-           tx build --yes
+           tx build
 
      Multi-document configuration and build:
 

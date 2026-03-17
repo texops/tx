@@ -721,7 +721,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.NoError(t, err)
 
 		written, err := os.ReadFile(filepath.Join(dir, "paper.pdf"))
@@ -812,7 +812,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "prj_auto123", createdProjectID)
@@ -855,7 +855,7 @@ documents:
 		t.Setenv("TX_API_URL", apiSrv.URL)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		// RunBuild will error after project creation (mock only handles /api/projects),
 		// but the project_key generation side effect should have completed.
 		require.Error(t, err)
@@ -876,7 +876,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "run `tx init` to set up your project")
 	})
@@ -891,7 +891,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		ui := cli.NewUIWithTTYOptions(buf, true, false, in)
 
 		// Build will init then fail on auth — that's fine, we just check init happened.
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 
 		configData, readErr := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, readErr)
@@ -911,7 +911,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		in := strings.NewReader("n\n")
 		ui := cli.NewUIWithOptions(buf, true, in)
 
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "run `tx init` to set up your project")
 
@@ -1004,7 +1004,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, true, false, ui)
+		err := cli.RunBuild(dir, nil, true, ui)
 		require.NoError(t, err)
 		require.NotNil(t, receivedBuildOptions, "build_options should be sent in request")
 		assert.Equal(t, "true", receivedBuildOptions["no_cache"])
@@ -1089,153 +1089,10 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.NoError(t, err)
 		_, hasBuildOptions := receivedBody["build_options"]
 		assert.False(t, hasBuildOptions, "build_options should not be sent when --no-cache is not set")
-	})
-}
-
-func TestBuildCmd_SizeConfirmation(t *testing.T) {
-	// Helper to set up a build environment with files that total the given size.
-	// The instance server reports all files as missing to trigger upload.
-	setupBuild := func(t *testing.T, fileSize int) string {
-		t.Helper()
-
-		pdfContent := []byte("%PDF-1.4 test")
-
-		instSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch {
-			case r.URL.Path == "/projects/prj_conf/sync" && r.Method == "POST":
-				// Report main.tex as missing to trigger upload
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]any{
-					"missing": []string{"main.tex"},
-				})
-
-			case r.URL.Path == "/projects/prj_conf/upload" && r.Method == "POST":
-				w.WriteHeader(http.StatusOK)
-
-			case r.URL.Path == "/projects/prj_conf/build" && r.Method == "POST":
-				doneData, _ := json.Marshal(map[string]any{
-					"status":   "success",
-					"pdfUrl":   "/projects/prj_conf/builds/bld_001/output",
-					"build_id": "bld_001",
-				})
-				w.Header().Set("Content-Type", "text/event-stream")
-				w.Write([]byte("event: done\ndata: " + string(doneData) + "\n\n"))
-
-			case r.URL.Path == "/projects/prj_conf/builds/bld_001/output" && r.Method == "GET":
-				w.Header().Set("Content-Type", "application/pdf")
-				w.Write(pdfContent)
-
-			default:
-				w.WriteHeader(404)
-			}
-		}))
-		t.Cleanup(instSrv.Close)
-
-		apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch {
-			case r.URL.Path == "/api/projects" && r.Method == "POST":
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{
-					"id":                   "prj_conf",
-					"name":                 "test",
-					"distribution_version": "texlive:2021",
-				})
-			case r.URL.Path == "/api/projects/prj_conf/session" && r.Method == "POST":
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]any{
-					"instance_url": instSrv.URL,
-					"jwt":          "test-jwt",
-					"cache_cold":   false,
-				})
-			default:
-				w.WriteHeader(404)
-			}
-		}))
-		t.Cleanup(apiSrv.Close)
-
-		mockKeyringForAuth(t, "test-jwt-token")
-
-		t.Setenv("TX_API_URL", apiSrv.URL)
-
-		origNewIC := cli.NewInstanceClientFn
-		cli.NewInstanceClientFn = func(instanceURL, jwt string) *cli.InstanceClient {
-			ic := cli.NewInstanceClient(instanceURL, jwt)
-			ic.SetHTTPClient(instSrv.Client())
-			return ic
-		}
-		t.Cleanup(func() { cli.NewInstanceClientFn = origNewIC })
-
-		dir := t.TempDir()
-		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
-texlive: "texlive:2021"
-documents:
-  - name: main
-    main: main.tex
-`
-		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600)
-
-		// Create a file of the specified size
-		content := make([]byte, fileSize)
-		for i := range content {
-			content[i] = 'x'
-		}
-		os.WriteFile(filepath.Join(dir, "main.tex"), content, 0o600)
-
-		return dir
-	}
-
-	t.Run("large upload prompts confirmation and user accepts", func(t *testing.T) {
-		dir := setupBuild(t, 51_000_000) // 51 MB, over threshold
-
-		buf := &bytes.Buffer{}
-		ui := cli.NewUIWithOptions(buf, true, strings.NewReader("y\n"))
-		err := cli.RunBuild(dir, nil, false, false, ui)
-		require.NoError(t, err)
-		assert.Contains(t, buf.String(), "Upload size")
-		assert.Contains(t, buf.String(), "[Y/n]")
-	})
-
-	t.Run("large upload prompts confirmation and user declines", func(t *testing.T) {
-		dir := setupBuild(t, 51_000_000) // 51 MB, over threshold
-
-		buf := &bytes.Buffer{}
-		ui := cli.NewUIWithOptions(buf, true, strings.NewReader("n\n"))
-		err := cli.RunBuild(dir, nil, false, false, ui)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "upload cancelled by user")
-	})
-
-	t.Run("large upload with --yes skips confirmation", func(t *testing.T) {
-		dir := setupBuild(t, 51_000_000) // 51 MB, over threshold
-
-		ui, buf := testUI()
-		err := cli.RunBuild(dir, nil, false, true, ui) // skipConfirm=true
-		require.NoError(t, err)
-		assert.NotContains(t, buf.String(), "[Y/n]")
-	})
-
-	t.Run("small upload does not prompt confirmation", func(t *testing.T) {
-		dir := setupBuild(t, 1_000) // 1 KB, under threshold
-
-		ui, buf := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
-		require.NoError(t, err)
-		assert.NotContains(t, buf.String(), "[Y/n]")
-	})
-
-	t.Run("large upload auto-confirms in non-TTY mode", func(t *testing.T) {
-		dir := setupBuild(t, 51_000_000) // 51 MB, over threshold
-
-		ui, buf := testUI() // non-TTY
-		err := cli.RunBuild(dir, nil, false, false, ui)
-		require.NoError(t, err)
-		// Non-TTY should auto-confirm without prompt
-		assert.NotContains(t, buf.String(), "[Y/n]")
 	})
 }
 
@@ -1376,7 +1233,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, false, ui)
+		err := cli.RunBuild(s.dir, nil, false, ui)
 		require.NoError(t, err)
 
 		// Should get exactly one session and one sync for same-version docs
@@ -1411,7 +1268,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, false, ui)
+		err := cli.RunBuild(s.dir, nil, false, ui)
 		require.NoError(t, err)
 
 		// Should get two sessions (one per version) and two syncs
@@ -1436,7 +1293,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, _ := testUI()
-		err := cli.RunBuild(s.dir, []string{"paper"}, false, false, ui)
+		err := cli.RunBuild(s.dir, []string{"paper"}, false, ui)
 		require.NoError(t, err)
 
 		// Only one document should be built
@@ -1455,7 +1312,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(config), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, []string{"nonexistent"}, false, false, ui)
+		err := cli.RunBuild(dir, []string{"nonexistent"}, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown document")
 		assert.Contains(t, err.Error(), "nonexistent")
@@ -1473,7 +1330,7 @@ documents:
 		s := multiDocSetup(t, config, "slides.tex") // slides will fail
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, false, ui)
+		err := cli.RunBuild(s.dir, nil, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "one or more documents failed to build")
 
@@ -1499,7 +1356,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, false, ui)
+		err := cli.RunBuild(s.dir, nil, false, ui)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -1522,7 +1379,7 @@ documents:
 		os.WriteFile(filepath.Join(s.dir, "chapters", "paper", "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, false, ui)
+		err := cli.RunBuild(s.dir, nil, false, ui)
 		require.NoError(t, err)
 
 		assert.Len(t, *s.buildRequests, 2)
@@ -1623,7 +1480,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "xelatex", receivedCompiler, "compiler from config should be sent in build request")
@@ -1718,7 +1575,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.NoError(t, err)
 
 		require.Len(t, receivedCompilers, 2)
@@ -1806,7 +1663,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, false, ui)
+		err := cli.RunBuild(dir, nil, false, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "pdflatex", receivedCompiler, "default compiler should be pdflatex")
