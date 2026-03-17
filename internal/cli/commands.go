@@ -83,7 +83,6 @@ type InitCmd struct {
 type BuildCmd struct {
 	Args    struct{ Names []string } `positional-args:"true"`
 	NoCache bool                     `long:"no-cache" description:"Clear build cache and rebuild from scratch"`
-	Yes     bool                     `short:"y" long:"yes" description:"Skip upload size confirmation prompt"`
 	UI      *UI                      `no-flag:"true"`
 }
 
@@ -516,12 +515,12 @@ func (cmd *BuildCmd) Execute(args []string) error {
 	if ui == nil {
 		ui = defaultUI()
 	}
-	return RunBuild(dir, cmd.Args.Names, cmd.NoCache, cmd.Yes, ui)
+	return RunBuild(dir, cmd.Args.Names, cmd.NoCache, ui)
 }
 
 var errInitDeclined = errors.New("no project config found; run `tx init` to set up your project")
 
-func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI) error {
+func runBuild(dir string, names []string, noCache bool, ui *UI) error {
 	buildStart := time.Now()
 
 	configPath := filepath.Join(dir, ".texops.yaml")
@@ -661,7 +660,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 			continue
 		}
 
-		if err := handleUpload(ui, inst, projectID, dir, files, syncResult, skipConfirm, sp); err != nil {
+		if err := handleUpload(ui, inst, projectID, dir, files, syncResult, sp); err != nil {
 			// User cancellation should abort the entire build
 			if strings.Contains(err.Error(), "cancelled by user") {
 				return err
@@ -711,7 +710,7 @@ func runBuild(dir string, names []string, noCache bool, skipConfirm bool, ui *UI
 }
 
 // handleUpload processes file sync results and uploads missing files.
-func handleUpload(ui *UI, inst *InstanceClient, projectID, dir string, files []FileEntry, syncResult SyncResult, skipConfirm bool, sp *Spinner) error {
+func handleUpload(ui *UI, inst *InstanceClient, projectID, dir string, files []FileEntry, syncResult SyncResult, sp *Spinner) error {
 	if len(syncResult.Missing) > 0 {
 		knownPaths := make(map[string]bool)
 		filesByPath := make(map[string]FileEntry)
@@ -738,17 +737,6 @@ func handleUpload(ui *UI, inst *InstanceClient, projectID, dir string, files []F
 		uploadSize := TotalSize(uploadFiles)
 
 		sp.Stop(fmt.Sprintf("%d files to upload (%s)", len(validMissing), FormatSize(uploadSize)))
-
-		const sizeThreshold = 50_000_000
-		if uploadSize > sizeThreshold && !skipConfirm {
-			confirmed, err := ui.Confirm(fmt.Sprintf("Upload size is %s. Continue?", FormatSize(uploadSize)))
-			if err != nil {
-				return err
-			}
-			if !confirmed {
-				return fmt.Errorf("upload cancelled by user")
-			}
-		}
 
 		uploadLabel := fmt.Sprintf("Uploading %d files", len(validMissing))
 		pb := ui.Progress(uploadLabel, uploadSize)
