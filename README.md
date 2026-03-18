@@ -5,6 +5,18 @@ Command-line client for [TexOps](https://texops.dev) — a remote LaTeX compilat
 ## Install
 
 ```
+curl -fsSL https://raw.githubusercontent.com/texops/tx/main/scripts/install.sh | sh
+```
+
+To download the binary into the current directory without installing:
+
+```
+curl -fsSL https://raw.githubusercontent.com/texops/tx/main/scripts/download.sh | sh
+```
+
+Or with `go install`:
+
+```
 go install github.com/texops/tx/cmd/tx@latest
 ```
 
