@@ -721,7 +721,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		written, err := os.ReadFile(filepath.Join(dir, "paper.pdf"))
@@ -812,7 +812,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "prj_auto123", createdProjectID)
@@ -855,7 +855,7 @@ documents:
 		t.Setenv("TX_API_URL", apiSrv.URL)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		// RunBuild will error after project creation (mock only handles /api/projects),
 		// but the project_key generation side effect should have completed.
 		require.Error(t, err)
@@ -876,7 +876,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "run `tx init` to set up your project")
 	})
@@ -891,7 +891,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		ui := cli.NewUIWithTTYOptions(buf, true, false, in)
 
 		// Build will init then fail on auth — that's fine, we just check init happened.
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 
 		configData, readErr := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, readErr)
@@ -911,7 +911,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		in := strings.NewReader("n\n")
 		ui := cli.NewUIWithOptions(buf, true, in)
 
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "run `tx init` to set up your project")
 
@@ -1004,7 +1004,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, true, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, true, false, ui)
 		require.NoError(t, err)
 		require.NotNil(t, receivedBuildOptions, "build_options should be sent in request")
 		assert.Equal(t, "true", receivedBuildOptions["no_cache"])
@@ -1089,7 +1089,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.NoError(t, err)
 		_, hasBuildOptions := receivedBody["build_options"]
 		assert.False(t, hasBuildOptions, "build_options should not be sent when --no-cache is not set")
@@ -1233,7 +1233,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		// Should get exactly one session and one sync for same-version docs
@@ -1268,7 +1268,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		// Should get two sessions (one per version) and two syncs
@@ -1293,7 +1293,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, _ := testUI()
-		err := cli.RunBuild(s.dir, []string{"paper"}, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, []string{"paper"}, false, false, ui)
 		require.NoError(t, err)
 
 		// Only one document should be built
@@ -1312,7 +1312,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(config), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, []string{"nonexistent"}, false, ui)
+		err := cli.RunBuild(t.Context(), dir, []string{"nonexistent"}, false, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown document")
 		assert.Contains(t, err.Error(), "nonexistent")
@@ -1330,7 +1330,7 @@ documents:
 		s := multiDocSetup(t, config, "slides.tex") // slides will fail
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "one or more documents failed to build")
 
@@ -1356,7 +1356,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -1379,7 +1379,7 @@ documents:
 		os.WriteFile(filepath.Join(s.dir, "chapters", "paper", "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(s.dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		assert.Len(t, *s.buildRequests, 2)
@@ -1480,7 +1480,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "xelatex", receivedCompiler, "compiler from config should be sent in build request")
@@ -1575,7 +1575,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		require.Len(t, receivedCompilers, 2)
@@ -1663,7 +1663,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(dir, nil, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "pdflatex", receivedCompiler, "default compiler should be pdflatex")

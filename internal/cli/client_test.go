@@ -42,7 +42,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "test-key")
-		result, err := client.CreateProject("myproject", "texlive:2021", "")
+		result, err := client.CreateProject(t.Context(), "myproject", "texlive:2021", "")
 		require.NoError(t, err)
 		assert.Equal(t, "prj_abc123", result.ID)
 		assert.Equal(t, "myproject", result.Name)
@@ -57,7 +57,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "key")
-		_, err := client.CreateProject("proj", "texlive:2021", "")
+		_, err := client.CreateProject(t.Context(), "proj", "texlive:2021", "")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "create project failed (409)")
 	})
@@ -81,7 +81,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "test-key")
-		result, err := client.CreateProject("myproject", "texlive:2021", "k7Gx9mR2pL4wN8qY5vBt3a")
+		result, err := client.CreateProject(t.Context(), "myproject", "texlive:2021", "k7Gx9mR2pL4wN8qY5vBt3a")
 		require.NoError(t, err)
 		assert.Equal(t, "prj_new", result.ID)
 	})
@@ -104,7 +104,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "test-key")
-		_, err := client.CreateProject("proj", "texlive:2021", "")
+		_, err := client.CreateProject(t.Context(), "proj", "texlive:2021", "")
 		require.NoError(t, err)
 	})
 
@@ -121,7 +121,7 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "test-key")
-		result, err := client.CreateProject("myproject", "texlive:2021", "k7Gx9mR2pL4wN8qY5vBt3a")
+		result, err := client.CreateProject(t.Context(), "myproject", "texlive:2021", "k7Gx9mR2pL4wN8qY5vBt3a")
 		require.NoError(t, err)
 		assert.Equal(t, "prj_existing", result.ID)
 	})
@@ -150,7 +150,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "my-key")
-		session, err := client.GetSession("prj_abc", "texlive:2021")
+		session, err := client.GetSession(t.Context(), "prj_abc", "texlive:2021")
 		require.NoError(t, err)
 		assert.Equal(t, "https://10.0.0.1:8443", session.InstanceURL)
 		assert.Equal(t, "eyJhbGciOi...", session.JWT)
@@ -174,7 +174,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "my-key")
-		session, err := client.GetSession("prj_abc", "texlive:2019")
+		session, err := client.GetSession(t.Context(), "prj_abc", "texlive:2019")
 		require.NoError(t, err)
 		assert.Equal(t, "https://10.0.0.2:8443", session.InstanceURL)
 		assert.Equal(t, "jwt-2019", session.JWT)
@@ -188,7 +188,7 @@ func TestAPIClient_GetSession(t *testing.T) {
 		defer srv.Close()
 
 		client := cli.NewAPIClient(srv.URL, "key")
-		_, err := client.GetSession("prj_abc", "texlive:2021")
+		_, err := client.GetSession(t.Context(), "prj_abc", "texlive:2021")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "get session failed (503)")
 	})
@@ -215,7 +215,7 @@ func TestInstanceClient_Sync(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt-token")
 		client.SetHTTPClient(srv.Client())
-		result, err := client.Sync("prj_123", []cli.FileEntry{
+		result, err := client.Sync(t.Context(), "prj_123", []cli.FileEntry{
 			{Path: "file1.tex", Hash: "aaa"},
 			{Path: "file2.tex", Hash: "bbb"},
 		})
@@ -232,7 +232,7 @@ func TestInstanceClient_Sync(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "bad-jwt")
 		client.SetHTTPClient(srv.Client())
-		_, err := client.Sync("prj_123", []cli.FileEntry{})
+		_, err := client.Sync(t.Context(), "prj_123", []cli.FileEntry{})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "sync failed (401)")
 	})
@@ -263,7 +263,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		err := client.Upload("prj_123", dir, []string{"test.tex"}, nil)
+		err := client.Upload(t.Context(), "prj_123", dir, []string{"test.tex"}, nil)
 		require.NoError(t, err)
 	})
 
@@ -276,7 +276,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		err := client.Upload("prj_123", "/tmp", []string{}, nil)
+		err := client.Upload(t.Context(), "prj_123", "/tmp", []string{}, nil)
 		require.NoError(t, err)
 		assert.False(t, called)
 	})
@@ -295,7 +295,7 @@ func TestInstanceClient_Upload(t *testing.T) {
 		var progressCalls []int64
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		err := client.Upload("prj_123", dir, []string{"test.tex"}, func(sent, total int64) {
+		err := client.Upload(t.Context(), "prj_123", dir, []string{"test.tex"}, func(sent, total int64) {
 			progressCalls = append(progressCalls, sent)
 		})
 		require.NoError(t, err)
@@ -325,7 +325,7 @@ func TestInstanceClient_Build(t *testing.T) {
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
 		var logs []string
-		result, err := client.Build("prj_123", "paper.tex", "", "texlive:2021", "", nil, func(line string) {
+		result, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, func(line string) {
 			logs = append(logs, line)
 		})
 		require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestInstanceClient_Build(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		result, err := client.Build("prj_123", "paper.tex", "", "texlive:2021", "", nil, nil)
+		result, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, nil)
 		require.NoError(t, err)
 		assert.Equal(t, "error", result.Status)
 		assert.Equal(t, "Build failed", result.Message)
@@ -363,7 +363,7 @@ func TestInstanceClient_Build(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		_, err := client.Build("prj_123", "paper.tex", "", "texlive:2021", "", nil, nil)
+		_, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "build request failed (500)")
 	})
@@ -385,7 +385,7 @@ func TestInstanceClient_DownloadPDF(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt-token")
 		client.SetHTTPClient(srv.Client())
-		err := client.DownloadPDF("prj_123", "bld_abc", outputPath)
+		err := client.DownloadPDF(t.Context(), "prj_123", "bld_abc", outputPath)
 		require.NoError(t, err)
 
 		written, err := os.ReadFile(outputPath)
@@ -401,7 +401,7 @@ func TestInstanceClient_DownloadPDF(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		err := client.DownloadPDF("prj_123", "bld_bad", "/tmp/out.pdf")
+		err := client.DownloadPDF(t.Context(), "prj_123", "bld_bad", "/tmp/out.pdf")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "PDF download failed (404)")
 	})
@@ -745,11 +745,11 @@ func TestE2E_TwoClients(t *testing.T) {
 		defer apiSrv.Close()
 
 		api := cli.NewAPIClient(apiSrv.URL, "test-api-key")
-		project, err := api.CreateProject("test-project", "texlive:2021", "")
+		project, err := api.CreateProject(t.Context(), "test-project", "texlive:2021", "")
 		require.NoError(t, err)
 		assert.Equal(t, "prj_test", project.ID)
 
-		session, err := api.GetSession(project.ID, "texlive:2021")
+		session, err := api.GetSession(t.Context(), project.ID, "texlive:2021")
 		require.NoError(t, err)
 		assert.Equal(t, instSrv.URL, session.InstanceURL)
 		assert.Equal(t, "test-jwt-token", session.JWT)
@@ -758,17 +758,17 @@ func TestE2E_TwoClients(t *testing.T) {
 		inst.SetHTTPClient(instSrv.Client())
 
 		files := []cli.FileEntry{{Path: "paper.tex", Hash: "abc123"}}
-		syncResult, err := inst.Sync(project.ID, files)
+		syncResult, err := inst.Sync(t.Context(), project.ID, files)
 		require.NoError(t, err)
 		assert.Len(t, syncResult.Missing, 1)
 
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}"), 0o600))
-		err = inst.Upload(project.ID, dir, syncResult.Missing, nil)
+		err = inst.Upload(t.Context(), project.ID, dir, syncResult.Missing, nil)
 		require.NoError(t, err)
 
 		var logs []string
-		result, err := inst.Build(project.ID, "paper.tex", "", "texlive:2021", "", nil, func(line string) {
+		result, err := inst.Build(t.Context(), project.ID, "paper.tex", "", "texlive:2021", "", nil, func(line string) {
 			logs = append(logs, line)
 		})
 		require.NoError(t, err)
@@ -776,7 +776,7 @@ func TestE2E_TwoClients(t *testing.T) {
 		assert.Equal(t, []string{"Running latexmk..."}, logs)
 
 		outputPath := filepath.Join(dir, "paper.pdf")
-		err = inst.DownloadPDF(project.ID, "bld_001", outputPath)
+		err = inst.DownloadPDF(t.Context(), project.ID, "bld_001", outputPath)
 		require.NoError(t, err)
 
 		written, err := os.ReadFile(outputPath)
@@ -807,7 +807,7 @@ func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build("prj_001", "paper.tex", "chapters/paper", "texlive:2021", "", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "chapters/paper", "texlive:2021", "", nil, nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, "paper.tex", receivedPayload["main"])
@@ -836,7 +836,7 @@ func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build("prj_001", "paper.tex", "", "texlive:2021", "", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "", nil, nil)
 		require.NoError(t, err)
 
 		assert.NotContains(t, string(receivedBody), "directory")
@@ -865,7 +865,7 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build("prj_001", "paper.tex", "", "texlive:2021", "xelatex", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "xelatex", nil, nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, "paper.tex", receivedPayload["main"])
@@ -894,7 +894,7 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build("prj_001", "paper.tex", "", "texlive:2021", "", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "", nil, nil)
 		require.NoError(t, err)
 
 		assert.NotContains(t, string(receivedBody), "compiler")
@@ -921,7 +921,7 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.BuildWithArgs("prj_001", "paper.tex", "", "texlive:2021", "lualatex", nil, nil, nil)
+		_, err := ic.BuildWithArgs(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "lualatex", nil, nil, nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, "lualatex", receivedPayload["compiler"])

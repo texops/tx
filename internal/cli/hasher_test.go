@@ -1,8 +1,10 @@
 package cli_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +12,24 @@ import (
 
 	"github.com/texops/tx/internal/cli"
 )
+
+// cancelAfterN wraps a context and returns context.Canceled after the
+// underlying Err() has been called more than n times. This lets tests
+// deterministically cancel between the walk phase and the hashing phase
+// of CollectFiles.
+type cancelAfterN struct {
+	context.Context //nolint:containedctx
+
+	calls atomic.Int32
+	n     int32
+}
+
+func (c *cancelAfterN) Err() error {
+	if c.calls.Add(1) > c.n {
+		return context.Canceled
+	}
+	return c.Context.Err()
+}
 
 func TestHashContent(t *testing.T) {
 	t.Run("produces consistent SHA-256 hash for known content", func(t *testing.T) {
@@ -38,7 +58,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), paperContent, 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "refs.bib"), refsContent, 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		assert.Len(t, files, 2)
 		assert.Equal(t, "paper.tex", files[0].Path)
@@ -57,7 +77,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.Mkdir(filepath.Join(dir, "build"), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "build", "output.pdf"), []byte("pdf"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -75,7 +95,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.Mkdir(filepath.Join(dir, ".git"), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("git config"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -90,7 +110,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tex"), []byte("main"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "chapters", "intro.tex"), []byte("intro"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -101,7 +121,7 @@ func TestCollectFiles(t *testing.T) {
 
 	t.Run("returns empty slice for empty directory", func(t *testing.T) {
 		dir := t.TempDir()
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		assert.Empty(t, files)
 	})
@@ -112,7 +132,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log data"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -130,7 +150,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux data"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log data"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -150,7 +170,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "diagram.psd"), []byte("psd data"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "diagram.png"), []byte("png data"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -170,7 +190,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", "sketch.tmp"), []byte("tmp data"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -188,7 +208,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "figures", ".txignore"), []byte("*.psd\n"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -209,7 +229,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "scratch.tmp"), []byte("scratch"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "keep.tmp"), []byte("important"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -232,7 +252,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "scratch.tmp"), []byte("scratch"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "data", "keep.tmp"), []byte("important"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -251,7 +271,7 @@ func TestCollectFiles(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, ".txignore"), []byte("*.log\n"), 0o000))
 
-		_, err := cli.CollectFiles(dir)
+		_, err := cli.CollectFiles(t.Context(), dir)
 		assert.Error(t, err, "should return error when .txignore exists but cannot be read")
 	})
 
@@ -262,7 +282,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.aux"), []byte("aux data"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -279,7 +299,7 @@ func TestCollectFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "drafts", "old.tex"), []byte("old content"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		paths := make([]string, len(files))
 		for i, f := range files {
@@ -289,13 +309,36 @@ func TestCollectFiles(t *testing.T) {
 		assert.NotContains(t, paths, "drafts/old.tex", "drafts/ directory should be skipped entirely by .txignore")
 	})
 
+	t.Run("returns error when context is already cancelled", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		_, err := cli.CollectFiles(ctx, dir)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("returns error when context cancelled during hashing", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tex"), []byte("content"), 0o600))
+
+		// Walk visits root "." and "a.tex" (2 Err() calls).
+		// The 3rd call happens in the hashing loop and should trigger cancellation.
+		ctx := &cancelAfterN{Context: t.Context(), n: 2}
+
+		_, err := cli.CollectFiles(ctx, dir)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
 	t.Run("populates Size for all files", func(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tex"), []byte("hello"), 0o600))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "b.tex"), []byte("world!"), 0o600))
 
-		files, err := cli.CollectFiles(dir)
+		files, err := cli.CollectFiles(t.Context(), dir)
 		require.NoError(t, err)
 		require.Len(t, files, 2)
 		assert.Equal(t, int64(5), files[0].Size) // "hello" = 5 bytes

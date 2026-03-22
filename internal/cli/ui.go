@@ -274,10 +274,19 @@ func (s *Spinner) Fail(errMsg string) {
 	}
 }
 
+// Cancel stops the spinner without printing anything.
+func (s *Spinner) Cancel() {
+	if s.program != nil {
+		s.program.Send(spinnerDoneMsg{cancelled: true})
+		<-s.done
+	}
+}
+
 // spinnerDoneMsg is sent to the bubbletea program to signal completion.
 type spinnerDoneMsg struct {
-	text  string
-	style lipgloss.Style
+	text      string
+	style     lipgloss.Style
+	cancelled bool
 }
 
 // spinnerModel is the bubbletea model for an inline spinner.
@@ -306,7 +315,9 @@ func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case spinnerDoneMsg:
 		m.finished = true
-		m.finalMsg = msg.style.Render(msg.text)
+		if !msg.cancelled {
+			m.finalMsg = msg.style.Render(msg.text)
+		}
 		return m, tea.Quit
 	case spinner.TickMsg:
 		var cmd tea.Cmd

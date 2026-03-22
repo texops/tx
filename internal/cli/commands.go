@@ -3,10 +3,12 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -83,6 +85,7 @@ type InitCmd struct {
 type BuildCmd struct {
 	Args    struct{ Names []string } `positional-args:"true"`
 	NoCache bool                     `long:"no-cache" description:"Clear build cache and rebuild from scratch"`
+	Live    bool                     `long:"live" description:"Watch for changes and rebuild automatically"`
 	UI      *UI                      `no-flag:"true"`
 }
 
@@ -98,6 +101,15 @@ type docResult struct {
 	Output  string
 	Success bool
 	Err     error
+}
+
+type buildParams struct {
+	dir       string
+	docs      []Document
+	api       *APIClient
+	noCache   bool
+	ui        *UI
+	projectID string
 }
 
 func defaultUI() *UI {
@@ -515,12 +527,24 @@ func (cmd *BuildCmd) Execute(args []string) error {
 	if ui == nil {
 		ui = defaultUI()
 	}
-	return RunBuild(dir, cmd.Args.Names, cmd.NoCache, ui)
+	var ctx context.Context
+	if cmd.Live {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+	} else {
+		ctx = context.Background()
+	}
+	err = RunBuild(ctx, dir, cmd.Args.Names, cmd.NoCache, cmd.Live, ui)
+	if cmd.Live && ctx.Err() != nil {
+		return nil
+	}
+	return err
 }
 
 var errInitDeclined = errors.New("no project config found; run `tx init` to set up your project")
 
-func runBuild(dir string, names []string, noCache bool, ui *UI) error {
+func runBuild(ctx context.Context, dir string, names []string, noCache bool, live bool, ui *UI) error {
 	buildStart := time.Now()
 
 	configPath := filepath.Join(dir, ".texops.yaml")
@@ -595,7 +619,7 @@ func runBuild(dir string, names []string, noCache bool, ui *UI) error {
 	}
 
 	sp := ui.Spin("Resolving project...")
-	project, err := api.CreateProject(filepath.Base(dir), config.Texlive, config.ProjectKey)
+	project, err := api.CreateProject(ctx, filepath.Base(dir), config.Texlive, config.ProjectKey)
 	if err != nil {
 		sp.Fail(fmt.Sprintf("Failed to resolve project: %s", err))
 		return err
@@ -603,79 +627,17 @@ func runBuild(dir string, names []string, noCache bool, ui *UI) error {
 	sp.Stop("Project ready")
 	projectID := project.ID
 
-	// Collect files once (shared across all version groups)
-	sp = ui.Spin("Collecting files...")
-	files, err := CollectFiles(dir)
+	p := buildParams{
+		dir:       dir,
+		docs:      docs,
+		api:       api,
+		noCache:   noCache,
+		ui:        ui,
+		projectID: projectID,
+	}
+	results, err := buildOnce(ctx, p)
 	if err != nil {
-		sp.Fail(fmt.Sprintf("Failed to collect files: %s", err))
 		return err
-	}
-	totalSize := TotalSize(files)
-	sp.Stop(fmt.Sprintf("Found %d files (%s)", len(files), FormatSize(totalSize)))
-
-	// Group documents by effective texlive version
-	type versionGroup struct {
-		version string
-		docs    []Document
-	}
-	groupMap := make(map[string]*versionGroup)
-	var groupOrder []string
-	for _, doc := range docs {
-		v := doc.Texlive
-		if _, ok := groupMap[v]; !ok {
-			groupMap[v] = &versionGroup{version: v}
-			groupOrder = append(groupOrder, v)
-		}
-		groupMap[v].docs = append(groupMap[v].docs, doc)
-	}
-
-	var results []docResult
-
-	for _, version := range groupOrder {
-		group := groupMap[version]
-
-		// Get session for this version group
-		sp = ui.Spin("Getting session...")
-		session, err := api.GetSession(projectID, version)
-		if err != nil {
-			sp.Fail(fmt.Sprintf("Failed to get session: %s", err))
-			// Mark all docs in this group as failed
-			for _, doc := range group.docs {
-				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
-			}
-			continue
-		}
-		sp.Stop("Session acquired")
-
-		inst := NewInstanceClientFn(session.InstanceURL, session.JWT)
-
-		// Sync files once per version group
-		sp = ui.Spin("Syncing with instance...")
-		syncResult, err := inst.Sync(projectID, files)
-		if err != nil {
-			sp.Fail(fmt.Sprintf("Sync failed: %s", err))
-			for _, doc := range group.docs {
-				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
-			}
-			continue
-		}
-
-		if err := handleUpload(ui, inst, projectID, dir, files, syncResult, sp); err != nil {
-			// User cancellation should abort the entire build
-			if strings.Contains(err.Error(), "cancelled by user") {
-				return err
-			}
-			for _, doc := range group.docs {
-				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
-			}
-			continue
-		}
-
-		// Build each document in this group
-		for _, doc := range group.docs {
-			r := buildDocument(ui, inst, projectID, dir, doc, noCache)
-			results = append(results, r)
-		}
 	}
 
 	// Print build summary
@@ -699,7 +661,10 @@ func runBuild(dir string, names []string, noCache bool, ui *UI) error {
 		}
 	}
 
-	// Return error if any document failed
+	if live {
+		return watchAndBuild(ctx, dir, p)
+	}
+
 	for _, r := range results {
 		if !r.Success {
 			return fmt.Errorf("one or more documents failed to build")
@@ -709,8 +674,112 @@ func runBuild(dir string, names []string, noCache bool, ui *UI) error {
 	return nil
 }
 
+func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
+	sp := p.ui.Spin("Collecting files...")
+	files, err := CollectFiles(ctx, p.dir)
+	if err != nil {
+		if ctx.Err() != nil {
+			sp.Cancel()
+			return nil, ctx.Err()
+		}
+		sp.Fail(fmt.Sprintf("Failed to collect files: %s", err))
+		return nil, err
+	}
+
+	outputFiles := make(map[string]bool)
+	for _, doc := range p.docs {
+		outputFiles[doc.Output] = true
+	}
+	// Reuse the slice backing array: safe because CollectFiles returns a fresh slice each call.
+	filtered := files[:0]
+	for _, f := range files {
+		if !outputFiles[f.Path] {
+			filtered = append(filtered, f)
+		}
+	}
+	files = filtered
+
+	totalSize := TotalSize(files)
+	sp.Stop(fmt.Sprintf("Found %d files (%s)", len(files), FormatSize(totalSize)))
+
+	type versionGroup struct {
+		version string
+		docs    []Document
+	}
+	groupMap := make(map[string]*versionGroup)
+	var groupOrder []string
+	for _, doc := range p.docs {
+		v := doc.Texlive
+		if _, ok := groupMap[v]; !ok {
+			groupMap[v] = &versionGroup{version: v}
+			groupOrder = append(groupOrder, v)
+		}
+		groupMap[v].docs = append(groupMap[v].docs, doc)
+	}
+
+	var results []docResult
+
+	for _, version := range groupOrder {
+		group := groupMap[version]
+
+		sp = p.ui.Spin("Getting session...")
+		session, err := p.api.GetSession(ctx, p.projectID, version)
+		if err != nil {
+			if ctx.Err() != nil {
+				sp.Cancel()
+				return nil, ctx.Err()
+			}
+			sp.Fail(fmt.Sprintf("Failed to get session: %s", err))
+			for _, doc := range group.docs {
+				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
+			}
+			continue
+		}
+		sp.Stop("Session acquired")
+
+		inst := NewInstanceClientFn(session.InstanceURL, session.JWT)
+
+		sp = p.ui.Spin("Syncing with instance...")
+		syncResult, err := inst.Sync(ctx, p.projectID, files)
+		if err != nil {
+			if ctx.Err() != nil {
+				sp.Cancel()
+				return nil, ctx.Err()
+			}
+			sp.Fail(fmt.Sprintf("Sync failed: %s", err))
+			for _, doc := range group.docs {
+				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
+			}
+			continue
+		}
+
+		if err := handleUpload(ctx, p.ui, inst, p.projectID, p.dir, files, syncResult, sp); err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if strings.Contains(err.Error(), "cancelled by user") {
+				return nil, err
+			}
+			for _, doc := range group.docs {
+				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
+			}
+			continue
+		}
+
+		for _, doc := range group.docs {
+			r := buildDocument(ctx, p.ui, inst, p.projectID, p.dir, doc, p.noCache)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			results = append(results, r)
+		}
+	}
+
+	return results, nil
+}
+
 // handleUpload processes file sync results and uploads missing files.
-func handleUpload(ui *UI, inst *InstanceClient, projectID, dir string, files []FileEntry, syncResult SyncResult, sp *Spinner) error {
+func handleUpload(ctx context.Context, ui *UI, inst *InstanceClient, projectID, dir string, files []FileEntry, syncResult SyncResult, sp *Spinner) error {
 	if len(syncResult.Missing) > 0 {
 		knownPaths := make(map[string]bool)
 		filesByPath := make(map[string]FileEntry)
@@ -740,12 +809,15 @@ func handleUpload(ui *UI, inst *InstanceClient, projectID, dir string, files []F
 
 		uploadLabel := fmt.Sprintf("Uploading %d files", len(validMissing))
 		pb := ui.Progress(uploadLabel, uploadSize)
-		if err := inst.Upload(projectID, dir, validMissing, func(sent, total int64) {
+		if err := inst.Upload(ctx, projectID, dir, validMissing, func(sent, total int64) {
 			if total > 0 {
 				pb.Update(float64(sent) / float64(total))
 			}
 		}); err != nil {
 			pb.Abort()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			ui.Errorf("Upload failed: %s", err)
 			return err
 		}
@@ -757,7 +829,7 @@ func handleUpload(ui *UI, inst *InstanceClient, projectID, dir string, files []F
 }
 
 // buildDocument builds a single document and returns the result.
-func buildDocument(ui *UI, inst *InstanceClient, projectID, dir string, doc Document, noCache bool) docResult {
+func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID, dir string, doc Document, noCache bool) docResult {
 	displayMain := doc.Main
 	if doc.Directory != "" {
 		displayMain = filepath.Join(doc.Directory, doc.Main)
@@ -768,7 +840,7 @@ func buildDocument(ui *UI, inst *InstanceClient, projectID, dir string, doc Docu
 		buildOptions = map[string]string{"no_cache": "true"}
 	}
 	compileStart := time.Now()
-	result, err := inst.Build(projectID, doc.Main, doc.Directory, doc.Texlive, doc.Compiler, buildOptions, func(line string) {
+	result, err := inst.Build(ctx, projectID, doc.Main, doc.Directory, doc.Texlive, doc.Compiler, buildOptions, func(line string) {
 		ui.Log(line)
 	})
 	if err != nil {
@@ -788,7 +860,7 @@ func buildDocument(ui *UI, inst *InstanceClient, projectID, dir string, doc Docu
 		}
 
 		sp := ui.Spin(fmt.Sprintf("Downloading %s...", doc.Output))
-		if err := inst.DownloadPDF(projectID, result.BuildID, outputPath); err != nil {
+		if err := inst.DownloadPDF(ctx, projectID, result.BuildID, outputPath); err != nil {
 			sp.Fail(fmt.Sprintf("Download failed: %s", err))
 			return docResult{Name: doc.Name, Output: doc.Output, Err: err}
 		}

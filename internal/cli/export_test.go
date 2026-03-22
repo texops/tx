@@ -1,5 +1,10 @@
 package cli
 
+import (
+	"context"
+	"io"
+)
+
 var (
 	HasDocumentclass   = hasDocumentclass
 	ParseDuration      = parseDuration
@@ -11,6 +16,18 @@ var (
 	GenerateProjectKey = generateProjectKey
 	GenerateConfigYAML = generateConfigYAML
 )
+
+func WriteFilePreserveInode(r io.Reader, outputPath string) error {
+	return writeFilePreserveInode(r, outputPath)
+}
+
+// DocResult is exported for testing.
+type DocResult = docResult
+
+// WatchAndBuildWith wraps watchAndBuildWith for testing.
+func WatchAndBuildWith(ctx context.Context, dir string, ui *UI, build func(context.Context) ([]DocResult, error)) error {
+	return watchAndBuildWith(ctx, dir, ui, build, nil)
+}
 
 // SelectModel is an alias for selectModel, exported for testing.
 type SelectModel = selectModel
