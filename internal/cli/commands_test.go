@@ -613,7 +613,7 @@ func TestInitCmd(t *testing.T) {
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "2025"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, `main: "main.tex"`)
 		assert.Contains(t, buf.String(), "Created .texops.yaml")
