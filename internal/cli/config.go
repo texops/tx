@@ -20,7 +20,7 @@ var AllowedCompilers = []string{"pdflatex", "xelatex", "lualatex", "latex", "pla
 const defaultCompiler = "pdflatex"
 
 // TexliveVersions lists available TexLive distribution versions (newest first).
-var TexliveVersions = []string{"texlive:2021", "texlive:2019", "texlive:2017", "texlive:2015", "texlive:2013"}
+var TexliveVersions = []string{"2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"}
 
 // generateProjectKey returns a 22-character random base62 string.
 func generateProjectKey() (string, error) {
