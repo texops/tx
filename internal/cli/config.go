@@ -161,7 +161,7 @@ func ParseConfig(content string) (Config, error) {
 				return Config{}, fmt.Errorf("invalid config: documents[%d] 'output' must be a string", i)
 			}
 			if outputStr != "" {
-				output = outputStr
+				output = filepath.Clean(outputStr)
 			}
 		}
 		if escapesRoot(output) {

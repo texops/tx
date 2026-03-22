@@ -14,6 +14,7 @@
 .Op Fl -main Ar file
 .Nm
 .Cm build
+.Op Fl -live
 .Op Fl -no-cache
 .Op Ar name ...
 .Nm
@@ -125,6 +126,14 @@ When stdout is not a TTY, the build fails with an error.
 .Pp
 Flags:
 .Bl -tag -width Ds
+.It Fl -live
+Watch for file changes and rebuild automatically.
+After the initial build, the command monitors the project directory for
+modifications and triggers a rebuild approximately 500ms after the last change.
+Rapid successive saves are coalesced into a single rebuild.
+Output PDFs are rewritten in place (preserving the file inode) so that PDF
+viewers such as Preview.app and Skim auto-refresh without reopening the file.
+Press Ctrl+C to stop watching and exit.
 .It Fl -no-cache
 Rebuild without using the remote build cache.
 .El
@@ -413,6 +422,10 @@ exits 0 even when not authenticated or the session has expired.
 Build a specific document:
 .Pp
 .Dl $ tx build paper
+.Pp
+Watch for changes and rebuild automatically:
+.Pp
+.Dl $ tx build --live
 .Pp
 Rebuild from scratch without cache:
 .Pp

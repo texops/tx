@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -33,7 +34,7 @@ type txignoreEntry struct {
 	anyPattern *ignore.GitIgnore
 }
 
-func CollectFiles(dir string) ([]FileEntry, error) {
+func CollectFiles(ctx context.Context, dir string) ([]FileEntry, error) {
 	ig := loadGitignore(dir)
 	txignoreCache := make(map[string]*txignoreEntry)
 
@@ -52,6 +53,9 @@ func CollectFiles(dir string) ([]FileEntry, error) {
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
 		rel, err := filepath.Rel(dir, path)
@@ -106,6 +110,9 @@ func CollectFiles(dir string) ([]FileEntry, error) {
 
 	entries := make([]FileEntry, 0, len(found))
 	for _, f := range found {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		data, err := os.ReadFile(filepath.Join(dir, f.path))
 		if err != nil {
 			return nil, err

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -103,7 +104,7 @@ func (c *APIClient) SetHTTPClient(hc *http.Client) {
 	c.httpClient = hc
 }
 
-func (c *APIClient) CreateProject(name, distVersion, projectKey string) (CreateProjectResponse, error) {
+func (c *APIClient) CreateProject(ctx context.Context, name, distVersion, projectKey string) (CreateProjectResponse, error) {
 	payload := map[string]string{
 		"name":                 name,
 		"distribution_version": distVersion,
@@ -116,7 +117,7 @@ func (c *APIClient) CreateProject(name, distVersion, projectKey string) (CreateP
 		return CreateProjectResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL+"/api/projects", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/projects", bytes.NewReader(body))
 	if err != nil {
 		return CreateProjectResponse{}, err
 	}
@@ -140,7 +141,7 @@ func (c *APIClient) CreateProject(name, distVersion, projectKey string) (CreateP
 	return result, nil
 }
 
-func (c *APIClient) GetSession(projectID, distributionVersion string) (SessionResponse, error) {
+func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersion string) (SessionResponse, error) {
 	u := fmt.Sprintf("%s/api/projects/%s/session", c.baseURL, projectID)
 
 	body, err := json.Marshal(map[string]string{
@@ -150,7 +151,7 @@ func (c *APIClient) GetSession(projectID, distributionVersion string) (SessionRe
 		return SessionResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", u, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return SessionResponse{}, err
 	}
@@ -418,7 +419,7 @@ func (c *InstanceClient) SetHTTPClient(hc *http.Client) {
 	c.httpClient = hc
 }
 
-func (c *InstanceClient) Sync(projectID string, files []FileEntry) (SyncResult, error) {
+func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []FileEntry) (SyncResult, error) {
 	body := struct {
 		Files []FileEntry `json:"files"`
 	}{Files: files}
@@ -430,7 +431,7 @@ func (c *InstanceClient) Sync(projectID string, files []FileEntry) (SyncResult, 
 
 	u := fmt.Sprintf("%s/projects/%s/sync", c.baseURL, projectID)
 
-	req, err := http.NewRequest("POST", u, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(data))
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -454,12 +455,12 @@ func (c *InstanceClient) Sync(projectID string, files []FileEntry) (SyncResult, 
 	return result, nil
 }
 
-func (c *InstanceClient) Upload(projectID, projectDir string, filePaths []string, onProgress func(sent, total int64)) error {
+func (c *InstanceClient) Upload(ctx context.Context, projectID, projectDir string, filePaths []string, onProgress func(sent, total int64)) error {
 	if len(filePaths) == 0 {
 		return nil
 	}
 
-	tarData, err := createTar(projectDir, filePaths)
+	tarData, err := createTar(ctx, projectDir, filePaths)
 	if err != nil {
 		return err
 	}
@@ -479,7 +480,7 @@ func (c *InstanceClient) Upload(projectID, projectDir string, filePaths []string
 		}
 	}
 
-	req, err := http.NewRequest("POST", u, body)
+	req, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
 		return err
 	}
@@ -499,10 +500,10 @@ func (c *InstanceClient) Upload(projectID, projectDir string, filePaths []string
 	return nil
 }
 
-func (c *InstanceClient) UploadRaw(projectID string, tarData []byte) error {
+func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarData []byte) error {
 	u := fmt.Sprintf("%s/projects/%s/upload", c.baseURL, projectID)
 
-	req, err := http.NewRequest("POST", u, bytes.NewReader(tarData))
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(tarData))
 	if err != nil {
 		return err
 	}
@@ -521,7 +522,7 @@ func (c *InstanceClient) UploadRaw(projectID string, tarData []byte) error {
 	return nil
 }
 
-func (c *InstanceClient) BuildWithArgs(projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
+func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
 	payload := map[string]any{
 		"main":                 main,
 		"distribution_version": distVersion,
@@ -542,7 +543,7 @@ func (c *InstanceClient) BuildWithArgs(projectID, main, directory, distVersion, 
 
 	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
 
-	req, err := http.NewRequest("POST", u, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return BuildDoneEvent{}, err
 	}
@@ -562,7 +563,7 @@ func (c *InstanceClient) BuildWithArgs(projectID, main, directory, distVersion, 
 	return ParseSSEStream(resp.Body, onLog)
 }
 
-func (c *InstanceClient) Build(projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
+func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
 	payload := map[string]any{
 		"main":                 main,
 		"distribution_version": distVersion,
@@ -580,7 +581,7 @@ func (c *InstanceClient) Build(projectID, main, directory, distVersion, compiler
 
 	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
 
-	req, err := http.NewRequest("POST", u, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return BuildDoneEvent{}, err
 	}
@@ -600,13 +601,13 @@ func (c *InstanceClient) Build(projectID, main, directory, distVersion, compiler
 	return ParseSSEStream(resp.Body, onLog)
 }
 
-func (c *InstanceClient) DownloadPDF(projectID, buildID, outputPath string) error {
+func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, outputPath string) error {
 	if !validIDPattern.MatchString(buildID) {
 		return fmt.Errorf("invalid build ID format")
 	}
 	u := fmt.Sprintf("%s/projects/%s/builds/%s/output", c.baseURL, projectID, buildID)
 
-	req, err := http.NewRequest("GET", u, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return err
 	}
@@ -622,21 +623,45 @@ func (c *InstanceClient) DownloadPDF(projectID, buildID, outputPath string) erro
 		return fmt.Errorf("PDF download failed (%d)", resp.StatusCode)
 	}
 
-	f, err := os.Create(outputPath)
+	return writeFilePreserveInode(resp.Body, outputPath)
+}
+
+func writeFilePreserveInode(r io.Reader, outputPath string) error {
+	tmp, err := os.CreateTemp(filepath.Dir(outputPath), ".tx-download-*.tmp")
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(f, resp.Body)
-	closeErr := f.Close()
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	_, copyErr := io.Copy(tmp, r)
+	closeErr := tmp.Close()
 	if copyErr != nil {
-		_ = os.Remove(outputPath)
 		return copyErr
 	}
 	if closeErr != nil {
-		_ = os.Remove(outputPath)
 		return closeErr
 	}
-	return nil
+
+	tmpRead, err := os.Open(tmpPath)
+	if err != nil {
+		return err
+	}
+
+	out, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		_ = tmpRead.Close()
+		return err
+	}
+
+	_, copyErr = io.Copy(out, tmpRead)
+	_ = tmpRead.Close()
+	closeErr = out.Close()
+
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
 }
 
 func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error) {
@@ -699,11 +724,14 @@ func extractSSEMessage(data string) string {
 	return data
 }
 
-func createTar(dir string, filePaths []string) ([]byte, error) {
+func createTar(ctx context.Context, dir string, filePaths []string) ([]byte, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
 	for _, fp := range filePaths {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		data, err := os.ReadFile(filepath.Join(dir, fp))
 		if err != nil {
 			return nil, err
