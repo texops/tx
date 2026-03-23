@@ -1,0 +1,28 @@
+/* === Global Docusaurus variables === */
+:root {
+  --ifm-font-size-base: 100%;
+  --ifm-code-font-size: 95%;
+  --ifm-global-spacing: 1rem;
+  --ifm-color-primary: #333;
+  --ifm-footer-padding-vertical: 1rem;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #ccc;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* === Shared navbar === */
+.navbar {
+  box-shadow: none;
+}
+
+.navbar__title {
+  font-size: 0.95rem;
+}
+
+[data-theme='dark'] .navbar__logo img {
+  filter: invert(1);
+}
+

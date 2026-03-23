@@ -1,0 +1,41 @@
+.figure {
+  margin: 1.5rem 0;
+}
+
+.pre {
+  background: hsl(0, 5%, 10%);
+  color: hsl(0, 0%, 65%);
+  line-height: 1.4;
+  padding: 1.25rem 1.5rem;
+  overflow-x: auto;
+  border-radius: 0;
+  border: 1px solid hsl(0, 0%, 20%);
+}
+
+.prompt {
+  color: #c0977a;
+}
+
+.cmd {
+  color: hsl(0, 0%, 88%);
+}
+
+.ok {
+  color: #7ec699;
+}
+
+.dim {
+  color: hsl(0, 0%, 55%);
+}
+
+.err {
+  color: #e87c7c;
+}
+
+.cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  background: #c0977a;
+  vertical-align: text-bottom;
+}

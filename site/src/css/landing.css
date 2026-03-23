@@ -1,0 +1,631 @@
+/*!
+ * Landing page styles.
+ *
+ * All rules scoped via html:has(.landing-page) — only active when the
+ * .landing-page wrapper div is present (index.mdx).
+ *
+ * Typography based on LaTeX.css (https://latex.vercel.app/).
+ * Source: https://github.com/vincentdoerig/latex-css
+ * Licensed under MIT (https://github.com/vincentdoerig/latex-css/blob/master/LICENSE)
+ *
+ * Changes from upstream LaTeX.css:
+ *   - Dark mode rewired from .latex-dark / prefers-color-scheme to [data-theme='dark']
+ *   - Fonts self-hosted in static/fonts/ (originally from https://latex.vercel.app/fonts/)
+ *   - Removed body layout rules (max-width, margin, padding) — Docusaurus owns layout
+ *   - Removed Libertinus font faces (unused)
+ *   - Removed box-sizing reset (Docusaurus owns it)
+ */
+
+/* === Fonts === */
+
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: normal;
+  font-weight: normal;
+  font-display: swap;
+  src: url('/fonts/LM-regular.woff2') format('woff2'),
+    url('/fonts/LM-regular.woff') format('woff'),
+    url('/fonts/LM-regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: italic;
+  font-weight: normal;
+  font-display: swap;
+  src: url('/fonts/LM-italic.woff2') format('woff2'),
+    url('/fonts/LM-italic.woff') format('woff'),
+    url('/fonts/LM-italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: normal;
+  font-weight: bold;
+  font-display: swap;
+  src: url('/fonts/LM-bold.woff2') format('woff2'),
+    url('/fonts/LM-bold.woff') format('woff'),
+    url('/fonts/LM-bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Latin Modern';
+  font-style: italic;
+  font-weight: bold;
+  font-display: swap;
+  src: url('/fonts/LM-bold-italic.woff2') format('woff2'),
+    url('/fonts/LM-bold-italic.woff') format('woff'),
+    url('/fonts/LM-bold-italic.ttf') format('truetype');
+}
+
+/* === Theme variables === */
+
+html:has(.landing-page) {
+  --body-color: hsl(0, 5%, 10%);
+  --body-bg-color: hsl(210, 20%, 98%);
+  --link-visited: hsl(0, 100%, 33%);
+  --link-focus-outline: hsl(220, 90%, 52%);
+  --pre-bg-color: hsl(210, 28%, 93%);
+  --footnotes-border-color: hsl(0, 0%, 39%);
+}
+
+html:has(.landing-page)[data-theme='dark'] {
+  --body-color: hsl(0, 0%, 86%);
+  --body-bg-color: hsl(0, 0%, 16%);
+  --link-visited: hsl(196 80% 77%);
+  --link-focus-outline: hsl(215, 63%, 73%);
+  --pre-bg-color: hsl(0, 1%, 25%);
+  --footnotes-border-color: hsl(0, 0%, 59%);
+  --ifm-background-color: var(--body-bg-color);
+}
+
+/* === Page background === */
+
+html:has(.landing-page) body {
+  background-color: var(--body-bg-color);
+}
+
+html:has(.landing-page) {
+  overflow-x: hidden;
+}
+
+/* === Navbar === */
+
+html:has(.landing-page) .navbar {
+  background: none;
+}
+
+html:has(.landing-page)[data-theme='dark'] .navbar {
+  color: hsl(0, 0%, 86%);
+}
+
+html:has(.landing-page)[data-theme='dark'] .navbar__title,
+html:has(.landing-page)[data-theme='dark'] .navbar__link {
+  color: hsl(0, 0%, 86%);
+}
+
+/* === Layout === */
+
+html:has(.landing-page) .col--3 {
+  display: none;
+}
+
+html:has(.landing-page) .main-wrapper .col,
+html:has(.landing-page) .main-wrapper .row,
+html:has(.landing-page) .main-wrapper .container {
+  --ifm-spacing-horizontal: 0px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 100%;
+}
+
+html:has(.landing-page) .main-wrapper {
+  max-width: 90ch;
+  width: 100%;
+  margin: 0 auto;
+  padding: 3rem 1rem 0;
+  overflow-wrap: break-word;
+  font-family: 'Latin Modern', Georgia, Cambria, 'Times New Roman', Times, serif;
+  font-size: 1.125rem;
+  line-height: 1.8;
+  counter-reset: figcaption;
+  color: var(--body-color);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
+/* === Navbar logo === */
+
+/* === Hero title === */
+
+html:has(.landing-page) .hero-title-name {
+  font-size: 0.75em;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+  color: hsl(0, 0%, 40%);
+}
+
+html:has(.landing-page)[data-theme='dark'] .hero-title-name {
+  color: hsl(0, 0%, 55%);
+}
+
+html:has(.landing-page) .hero-alpha {
+  font-size: 0.65em;
+  font-weight: normal;
+  font-style: italic;
+  font-variant: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  color: hsl(0, 0%, 50%);
+  margin-left: 0.15em;
+  vertical-align: super;
+}
+
+/* === Typography === */
+
+html:has(.landing-page) article {
+  text-align: left;
+}
+
+html:has(.landing-page) h1,
+html:has(.landing-page) h2,
+html:has(.landing-page) h3,
+html:has(.landing-page) h4,
+html:has(.landing-page) h5,
+html:has(.landing-page) h6 {
+  font-family: inherit;
+}
+
+html:has(.landing-page) h1,
+html:has(.landing-page) h2,
+html:has(.landing-page) h3,
+html:has(.landing-page) h4,
+html:has(.landing-page) p,
+html:has(.landing-page) figure,
+html:has(.landing-page) figcaption,
+html:has(.landing-page) dl,
+html:has(.landing-page) dd {
+  margin: 0;
+}
+
+html:has(.landing-page) p {
+  margin-top: 1rem;
+}
+
+html:has(.landing-page) .landing-page > * + * {
+  margin-top: 1em;
+}
+
+html:has(.landing-page) h1 {
+  font-size: 2.5rem;
+  line-height: 3.25rem;
+  margin-bottom: 1.625rem;
+}
+
+html:has(.landing-page) .landing-page > h1 {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+html:has(.landing-page) h2 {
+  font-size: 1.7rem;
+  line-height: 2rem;
+  margin-top: 3rem;
+}
+
+html:has(.landing-page) h3 {
+  font-size: 1.4rem;
+  margin-top: 2.5rem;
+}
+
+html:has(.landing-page) h4 {
+  font-size: 1.2rem;
+  margin-top: 2rem;
+}
+
+html:has(.landing-page) h3,
+html:has(.landing-page) h4,
+html:has(.landing-page) h5,
+html:has(.landing-page) h6 {
+  line-height: 1.625rem;
+}
+
+html:has(.landing-page) h1 + h2 {
+  margin-top: 1.625rem;
+}
+
+html:has(.landing-page) h2 + h3,
+html:has(.landing-page) h3 + h4,
+html:has(.landing-page) h4 + h5 {
+  margin-top: 0.8rem;
+}
+
+html:has(.landing-page) h2,
+html:has(.landing-page) h3,
+html:has(.landing-page) h4,
+html:has(.landing-page) h5,
+html:has(.landing-page) h6 {
+  margin-bottom: 0.8rem;
+}
+
+/* === Links === */
+
+html:has(.landing-page) .main-wrapper a,
+html:has(.landing-page) .main-wrapper a:visited {
+  color: var(--link-visited);
+}
+
+html:has(.landing-page) .main-wrapper a:focus {
+  outline-offset: 2px;
+  outline: 2px solid var(--link-focus-outline);
+}
+
+/* === Code === */
+
+html:has(.landing-page) code,
+html:has(.landing-page) pre {
+  font-family: Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 80%;
+  hyphens: none;
+}
+
+:where(html:has(.landing-page)) pre {
+  padding: 1rem 1.4rem;
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 0;
+  background: var(--pre-bg-color);
+}
+
+:where(html:has(.landing-page)) article pre {
+  padding: 0.5rem 0.8rem;
+}
+
+html:has(.landing-page) pre code {
+  font-size: 95%;
+  position: relative;
+}
+
+html:has(.landing-page) .codeBlockContainer_node_modules-\@docusaurus-theme-classic-lib-theme-CodeBlock-Container-styles-module {
+  border-radius: 0;
+}
+
+html:has(.landing-page) [class*='codeBlockContainer'] {
+  border: 1px solid hsl(0, 0%, 80%);
+  border-radius: 0 !important;
+}
+
+html:has(.landing-page)[data-theme='dark'] [class*='codeBlockContainer'] {
+  border-color: hsl(0, 0%, 28%);
+}
+
+html:has(.landing-page) [class*='codeBlockTitle'] {
+  border-radius: 0 !important;
+  border-bottom: 1px solid hsl(0, 0%, 80%);
+}
+
+html:has(.landing-page)[data-theme='dark'] [class*='codeBlockTitle'] {
+  border-bottom-color: hsl(0, 0%, 28%);
+}
+
+/* === Figures === */
+
+html:has(.landing-page) figure {
+  counter-increment: figcaption;
+}
+
+html:has(.landing-page) figcaption {
+  text-align: center;
+  font-size: 0.88em;
+  padding: 0.6em 0.25em 0;
+  width: 100%;
+  margin-left: 0;
+  color: hsl(0, 0%, 40%);
+}
+
+html:has(.landing-page)[data-theme='dark'] figcaption {
+  color: hsl(0, 0%, 55%);
+}
+
+html:has(.landing-page) figcaption::before {
+  content: 'Figure ' counter(figcaption) '. ';
+  font-weight: bold;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+/* === Abstract === */
+
+html:has(.landing-page) .abstract,
+html:has(.landing-page) .abstract p {
+  text-align: center;
+  margin-top: 0;
+}
+
+html:has(.landing-page) .abstract {
+  margin: 0 auto 1.5rem;
+  max-width: 60ch;
+  padding: 0.6rem 0 0.8rem;
+  border-top: 0.8px solid hsl(0, 0%, 55%);
+  border-bottom: 0.8px solid hsl(0, 0%, 55%);
+}
+
+html:has(.landing-page)[data-theme='dark'] .abstract {
+  border-top-color: hsl(0, 0%, 40%);
+  border-bottom-color: hsl(0, 0%, 40%);
+}
+
+html:has(.landing-page) .abstract > h2 {
+  font-size: 1rem;
+  margin-top: 0;
+  margin-bottom: -0.2rem;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+/* === CTA === */
+
+html:has(.landing-page) .cta-hero {
+  text-align: center;
+  margin: 0;
+}
+
+html:has(.landing-page) .cta-hero p {
+  font-size: 1.05rem;
+  margin-bottom: 0.5rem;
+  font-style: italic;
+}
+
+html:has(.landing-page) .cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+html:has(.landing-page) .cta-buttons a {
+  display: inline-block;
+  padding: 0.4em 1.6em;
+  border: 1.5px solid var(--body-color);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+  color: var(--body-color);
+  transition: background 0.15s, color 0.15s;
+}
+
+html:has(.landing-page) .cta-buttons a:visited {
+  color: var(--body-color);
+}
+
+html:has(.landing-page) .cta-buttons a:hover {
+  background: var(--body-color);
+  color: var(--body-bg-color);
+}
+
+html:has(.landing-page) .cta-buttons a.cta-primary {
+  background: var(--body-color);
+  color: var(--body-bg-color);
+  font-weight: bold;
+}
+
+html:has(.landing-page) .cta-buttons a.cta-primary:hover {
+  background: transparent;
+  color: var(--body-color);
+}
+
+html:has(.landing-page) .cta-box {
+  text-align: center;
+  margin: 3rem 0 0;
+  padding: 2.5rem 0;
+  border-top: 1.5px solid hsl(0, 0%, 65%);
+}
+
+html:has(.landing-page)[data-theme='dark'] .cta-box {
+  border-top-color: hsl(0, 0%, 35%);
+}
+
+html:has(.landing-page) .cta-box p {
+  margin-bottom: 0.5rem;
+  font-style: italic;
+}
+
+html:has(.landing-page) .cta-box a {
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1.5px solid currentColor;
+}
+
+html:has(.landing-page) .cta-box a:visited {
+  color: var(--body-color);
+}
+
+html:has(.landing-page) .cta-box a:hover {
+  border-bottom-color: transparent;
+}
+
+html:has(.landing-page) .cta-separator {
+  margin: 0 0.8em;
+  color: hsl(0, 0%, 55%);
+}
+
+/* === Section separators === */
+
+html:has(.landing-page) h2 {
+  padding-top: 2.5rem;
+  border-top: 1.5px solid hsl(0, 0%, 65%);
+}
+
+html:has(.landing-page)[data-theme='dark'] h2 {
+  border-top-color: hsl(0, 0%, 35%);
+}
+
+html:has(.landing-page) h1 + h2,
+html:has(.landing-page) .abstract h2,
+html:has(.landing-page) h2#footnote-label {
+  border-top: none;
+  padding-top: 0;
+}
+
+html:has(.landing-page) h3 {
+  font-style: normal;
+}
+
+/* === TeX / LaTeX logos === */
+
+html:has(.landing-page) .tex-e {
+  text-transform: uppercase;
+  vertical-align: -0.5ex;
+  margin-left: -0.1667em;
+  margin-right: -0.125em;
+  font-size: 1em;
+}
+
+html:has(.landing-page) .latex-a {
+  text-transform: uppercase;
+  font-size: 0.85em;
+  vertical-align: 0.35ex;
+  margin-left: -0.36em;
+  margin-right: -0.15em;
+}
+
+/* === Components === */
+
+/* === Tabs === */
+
+html:has(.landing-page) .tabs-container {
+  margin-top: 0.3rem;
+}
+
+html:has(.landing-page) .tabs {
+  border-bottom: none;
+  font-size: 0.85rem;
+}
+
+html:has(.landing-page) .tabs__item {
+  padding: 0.2rem 0;
+  margin-right: 0.8rem;
+  border-bottom-width: 1px;
+  font-size: 0.85rem;
+}
+
+html:has(.landing-page) .tabs__item--active {
+  border-bottom-style: dotted;
+  border-bottom-color: currentColor;
+}
+
+html:has(.landing-page) .tabs-container pre {
+  padding: 0.35rem 0.7rem !important;
+  border: none;
+  border-radius: 0;
+}
+
+/* === Footnotes === */
+
+html:has(.landing-page) .footnotes {
+  border-top: 1px solid var(--footnotes-border-color);
+}
+
+html:has(.landing-page) .footnotes p {
+  line-height: 1.5;
+  font-size: 85%;
+  margin-bottom: 0.4rem;
+}
+
+html:has(.landing-page) .footnotes hr {
+  display: none;
+}
+
+html:has(.landing-page) h2#footnote-label {
+  display: none;
+  border-top: none;
+  padding-top: 0;
+}
+
+html:has(.landing-page) .footnotes ol {
+  font-size: 0.85rem;
+  color: hsl(0, 0%, 40%);
+}
+
+html:has(.landing-page)[data-theme='dark'] .footnotes ol {
+  color: hsl(0, 0%, 55%);
+}
+
+/* === Dark-mode terminal border === */
+
+html:has(.landing-page)[data-theme='dark'] figure > pre {
+  border-color: hsl(0, 0%, 28%);
+}
+
+/* === Footer === */
+
+html:has(.landing-page) .footer {
+  background: none;
+  color: hsl(0, 0%, 40%);
+  font-size: 0.85rem;
+  text-align: center;
+  border-top: 1.5px solid hsl(0, 0%, 65%);
+  padding: 1.2rem 0;
+  max-width: 90ch;
+  margin: 3rem auto 0;
+}
+
+html:has(.landing-page)[data-theme='dark'] .footer {
+  border-top-color: hsl(0, 0%, 35%);
+  color: hsl(0, 0%, 50%);
+}
+
+/* === Entrance animation === */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html:has(.landing-page) .landing-page > * {
+  animation: fade-up 0.5s ease both;
+}
+
+html:has(.landing-page) .landing-page > :nth-child(1) { animation-delay: 0s; }
+html:has(.landing-page) .landing-page > :nth-child(2) { animation-delay: 0.06s; }
+html:has(.landing-page) .landing-page > :nth-child(3) { animation-delay: 0.12s; }
+html:has(.landing-page) .landing-page > :nth-child(4) { animation-delay: 0.18s; }
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing-page) .landing-page > * {
+    animation: none;
+  }
+}
+
+/* === Mobile === */
+
+@media (max-width: 600px) {
+  html:has(.landing-page) article {
+    text-align: left;
+  }
+
+  html:has(.landing-page) h1 {
+    font-size: 1.8rem;
+    line-height: 2.4rem;
+  }
+
+  html:has(.landing-page) .footer {
+    padding-inline: 1rem;
+  }
+}

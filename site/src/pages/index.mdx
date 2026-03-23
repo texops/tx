@@ -1,0 +1,163 @@
+---
+title: "TexOps — Cloud LaTeX Compilation"
+hide_table_of_contents: true
+---
+
+import Terminal from './components/Terminal';
+
+<div className="landing-page">
+
+<h1>
+<div className="hero-title-name">TexOps<sup className="hero-alpha">α</sup></div>
+<div>Move T<span className="tex-e">e</span>X Live to the Cloud. <span style={{whiteSpace: 'nowrap'}}>Keep Everything Else.</span></div>
+</h1>
+
+<div className="abstract">
+
+## Abstract
+
+Run `tx build` and turn your L<span className="latex-a">a</span>T<span className="tex-e">e</span>X document into a PDF in seconds. TexOps only handles compilation — your editor, repository, workflows, and habits stay the same.
+
+</div>
+
+<div className="cta-hero">
+  <p>Build your first document in minutes.</p>
+  <div className="cta-buttons">
+    <a href="/docs/quickstart" className="cta-primary">Get Started</a>
+    <a href="https://codespaces.new/texops/demo">Try Online</a>
+    <a href="https://github.com/texops/tx">GitHub</a>
+  </div>
+  <p className="cta-note">TexOps is in alpha. The service is free during this period.</p>
+</div>
+
+<Terminal caption="A typical workflow: initializing a project and compiling a document.">
+{`$ tx init
+  Scanning for .tex files...
+  Found: paper.tex, appendix.tex
+  ✓ .texops.yaml created
+
+$ tx build
+  Syncing files... 23 new, 0 changed
+  Building paper.tex (pdflatex)
+  This is pdfTeX, Version 3.141592653
+  Output written on paper.pdf (24 pages)
+  ✓ paper.pdf downloaded — 1.8 MB`}
+</Terminal>
+
+## The Problem
+
+### T<span className="tex-e">e</span>X Live is a burden
+
+A full T<span className="tex-e">e</span>X Live installation is 8+ GB. It breaks across OS upgrades, requires a fresh install for each yearly release, and turns every new machine into a setup project. You just want to write — not maintain a typesetting toolchain.
+
+### Builds drift across machines
+
+Your paper compiles on your laptop but fails on your co-author's. A package version differs, a font is missing, a compiler behaves slightly differently. A 2024 study found that only 42% of L<span className="latex-a">a</span>T<span className="tex-e">e</span>X documents produced identical output across T<span className="tex-e">e</span>X Live 2020–2023[^1].
+
+It gets worse across venues. As of 2025, major submission systems run T<span className="tex-e">e</span>X Live versions years apart — arXiv defaults to 2025, Elsevier uses 2022, and some Springer Nature journals still use 2017. Pinning an environment locally is painful, and keeping a team in sync is worse.
+
+### CI/CD for L<span className="latex-a">a</span>T<span className="tex-e">e</span>X is a mess
+
+Building L<span className="latex-a">a</span>T<span className="tex-e">e</span>X in GitHub Actions or GitLab CI means pulling a multi-GB Docker image, writing fragile workflow files, and debugging environment differences between local and CI builds.
+
+### Legacy documents are stuck in time
+
+That thesis from 2019, the conference paper that only compiles with T<span className="tex-e">e</span>X Live 2017 — reproducing old builds means resurrecting old environments. Running multiple T<span className="tex-e">e</span>X Live versions side by side locally is a project in itself.
+
+## Who It's For
+
+**Researchers targeting multiple venues.** You submit to arXiv, Springer, and Elsevier — each expecting a different T<span className="tex-e">e</span>X Live version. Pin the version per document and test against any of them.
+
+**Teams building L<span className="latex-a">a</span>T<span className="tex-e">e</span>X in CI/CD.** Your GitHub Actions workflow pulls a 4+ GB Docker image on every run. Replace it with a single `tx build` command.
+
+**Individual writers.** You write in VS Code, Vim, or Emacs and don't want to install or maintain T<span className="tex-e">e</span>X Live. TexOps compiles in the cloud with live reload — edit, save, and your PDF updates automatically.
+
+## How TexOps Works
+
+TexOps is a remote build service controlled by `tx` — a single static binary. You keep your editor, your repo, your folder structure. TexOps handles compilation, environment management, and version pinning.
+
+### Pin Your T<span className="tex-e">e</span>X Live Version
+
+Pin a specific T<span className="tex-e">e</span>X Live version per document. Versions 2012 through 2025 are available. Reproduce a conference build from years ago or test against the latest release. Different documents in the same project can use different versions. The version is declared in `.texops.yaml` and committed to your repo, so every machine and every CI run uses the same environment.
+
+Supports `pdflatex` (default), `xelatex`, `lualatex`, `latex`, `platex`, and `uplatex`. The compiler is declared per document in `.texops.yaml`.
+
+### Live Reload
+
+Run `tx build --live` and TexOps watches your project for changes. Every time you save, it syncs, rebuilds, and downloads the updated PDF. The output file is rewritten in place, so PDF viewers like Skim and Preview.app refresh automatically.
+
+<Terminal>
+{`$ tx build --live
+  ✓ Project ready
+  ✓ Found 23 files (1.2 MB)
+
+  Build complete: 1 succeeded, 0 failed (3.2s)
+    paper => paper.pdf
+
+  Watching for changes... (Ctrl+C to stop)
+
+  ✓ Found 23 files (1.2 MB)
+  [14:23:17] Built paper.pdf`}
+</Terminal>
+
+### CI/CD Ready
+
+Create API tokens with `tx token create` for use in GitHub Actions, GitLab CI, or any automation pipeline. Set the `TX_API_TOKEN` environment variable and `tx build` works headlessly.
+
+```yaml title="GitHub Actions"
+- name: Install tx
+  run: curl -fsSL https://raw.githubusercontent.com/texops/tx/main/scripts/install.sh | sh
+
+- name: Build paper
+  env:
+    TX_API_TOKEN: ${{ secrets.TEXOPS_TOKEN }}
+  run: tx build
+```
+
+### Incremental Sync
+
+Only changed files are uploaded on each build. Files are SHA256-hashed locally; unchanged images, bibliographies, and style files are never re-transferred. Second and subsequent builds sync in milliseconds.
+
+<Terminal>
+{`$ tx build
+  Syncing files... 0 new, 1 changed
+  Building paper.tex (pdflatex)
+  Output written on paper.pdf (24 pages)
+  ✓ paper.pdf downloaded — 1.8 MB (1.4s)`}
+</Terminal>
+
+### Multi-Document Projects
+
+A single project can contain multiple documents, each with its own compiler and T<span className="tex-e">e</span>X Live version. Run `tx build` to compile everything, or `tx build paper` to target just one.
+
+<Terminal>
+{`$ tx build
+  Syncing files... 0 new, 2 changed
+
+  Building paper (pdflatex)
+  ✓ paper.pdf downloaded — 1.8 MB
+
+  Building supplement (xelatex)
+  ✓ supplement.pdf downloaded — 340 KB
+
+  2 succeeded, 0 failed`}
+</Terminal>
+
+## No Lock-In
+
+The `tx` CLI is MIT-licensed and open source. Build configuration is a YAML file committed alongside your source.
+
+Builds run on a full, unmodified T<span className="tex-e">e</span>X Live installation with all packages and features available. Each build runs in an isolated gVisor container with network disabled and privileges dropped. Projects live in your repo and on your machine, not locked inside a platform.
+
+<div className="cta-box">
+  <p>Ready to try it?</p>
+  <a href="/docs/quickstart"><strong>Get Started</strong></a>
+  <span className="cta-separator">·</span>
+  <a href="https://codespaces.new/texops/demo"><strong>Try Online</strong></a>
+  <span className="cta-separator">·</span>
+  <a href="https://github.com/texops/tx"><strong>View on GitHub</strong></a>
+</div>
+
+[^1]: Tan & Rigger, [Inconsistencies in TeX-Produced Documents](https://arxiv.org/abs/2407.15511), ISSTA 2024.
+
+</div>
