@@ -53,13 +53,13 @@ COMMANDS
 
      The interactive prompts for TeX Live version, compiler, and documents
      require both stdin and stdout to be a TTY.  When either is not a TTY, the
-     defaults are used: texlive:2021, pdflatex as the compiler, and all
-     discovered documents.
+     defaults are used: 2025, pdflatex as the compiler, and all discovered
+     documents.
 
      Flags:
 
      --texlive version
-             TeX Live distribution version (e.g. "texlive:2021").  Skips the
+             TeX Live distribution version (e.g. "2025").  Skips the
              interactive version prompt.
 
      --compiler name
@@ -151,8 +151,8 @@ CONFIGURATION
              .texops.yaml before building.
 
      texlive
-             (required) TeX Live distribution version (e.g. "texlive:2021").
-             Must be a non-empty string.  Not validated against a fixed set of
+             (required) TeX Live distribution version (e.g. "2025").  Must be
+             a non-empty string.  Not validated against a fixed set of
              versions.
 
      compiler
@@ -202,7 +202,7 @@ CONFIGURATION
 
    Example configuration
            project_key: "aBcDeFgHiJkLmNoPqRsT12"
-           texlive: "texlive:2021"
+           texlive: "2025"
            compiler: "xelatex"
 
            documents:
@@ -213,7 +213,7 @@ CONFIGURATION
                directory: "appendix"
                output: "appendix.pdf"
                compiler: "lualatex"
-               texlive: "texlive:2019"
+               texlive: "2019"
 
 AUTHENTICATION
      tx looks up credentials in the following order:
@@ -309,7 +309,7 @@ EXAMPLES
 
            # .texops.yaml
            project_key: "aBcDeFgHiJkLmNoPqRsT12"
-           texlive: "texlive:2021"
+           texlive: "2025"
            compiler: "pdflatex"
 
            documents:

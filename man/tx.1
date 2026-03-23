@@ -86,7 +86,7 @@ In non-interactive mode, all discovered documents are included automatically.
 The interactive prompts for TeX Live version, compiler, and documents
 require both stdin and stdout to be a TTY.
 When either is not a TTY, the defaults are used:
-.Cm texlive:2021 ,
+.Cm 2025 ,
 .Cm pdflatex
 as the compiler, and all discovered documents.
 .Pp
@@ -94,7 +94,7 @@ Flags:
 .Bl -tag -width Ds
 .It Fl -texlive Ar version
 TeX Live distribution version
-.Pq e.g.\& Qq texlive:2021 .
+.Pq e.g.\& Qq 2025 .
 Skips the interactive version prompt.
 .It Fl -compiler Ar name
 LaTeX compiler.
@@ -224,7 +224,7 @@ before building.
 .It Cm texlive
 .Pq required
 TeX Live distribution version
-.Pq e.g.\& Qq texlive:2021 .
+.Pq e.g.\& Qq 2025 .
 Must be a non-empty string.
 Not validated against a fixed set of versions.
 .It Cm compiler
@@ -311,7 +311,7 @@ are rejected with a migration hint.
 .Ss Example configuration
 .Bd -literal -offset indent
 project_key: "aBcDeFgHiJkLmNoPqRsT12"
-texlive: "texlive:2021"
+texlive: "2025"
 compiler: "xelatex"
 
 documents:
@@ -322,7 +322,7 @@ documents:
     directory: "appendix"
     output: "appendix.pdf"
     compiler: "lualatex"
-    texlive: "texlive:2019"
+    texlive: "2019"
 .Ed
 .Sh AUTHENTICATION
 .Nm
@@ -446,7 +446,7 @@ Multi-document configuration and build:
 .Bd -literal -offset indent
 # .texops.yaml
 project_key: "aBcDeFgHiJkLmNoPqRsT12"
-texlive: "texlive:2021"
+texlive: "2025"
 compiler: "pdflatex"
 
 documents:
