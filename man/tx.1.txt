@@ -41,8 +41,9 @@ COMMANDS
    login
      Authenticate with the TexOps service using the device code flow.  A one-
      time code is displayed and the verification URL is opened in a browser
-     automatically when possible.  After authorization completes in the
-     browser, the session JWT is stored locally.
+     automatically when possible, with the code already filled in.  After
+     authorization completes in the browser, the session JWT is stored
+     locally.
 
    init
      Create a .texops.yaml configuration file in the current directory.

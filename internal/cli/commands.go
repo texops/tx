@@ -197,13 +197,12 @@ func (cmd *LoginCmd) Execute(args []string) error {
 	}
 	sp.Stop("Login code received")
 
-	// Step 2: Show user code and verification URL
+	// Step 2: Show the user code and open the verification page, which the
+	// server has already stamped with that code.
 	ui.Status(fmt.Sprintf("Your login code: %s", dcResp.UserCode))
-	ui.DimInfo(fmt.Sprintf("Open %s and enter the code above", dcResp.VerificationURL))
 
-	// Try to open browser
 	if err := OpenBrowser(dcResp.VerificationURL); err != nil {
-		ui.DimInfo("Could not open browser automatically")
+		ui.DimInfo(fmt.Sprintf("Could not open browser automatically. Open %s", dcResp.VerificationURL))
 	}
 
 	// Step 3: Poll for authorization

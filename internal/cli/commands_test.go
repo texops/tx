@@ -54,9 +54,13 @@ func TestLoginCmd(t *testing.T) {
 		}
 		defer func() { cli.KeyringSet = origSet }()
 
-		// Suppress browser opening
+		// Suppress browser opening, recording what it was asked to open
+		var openedURL string
 		origBrowser := cli.OpenBrowser
-		cli.OpenBrowser = func(url string) error { return nil }
+		cli.OpenBrowser = func(url string) error {
+			openedURL = url
+			return nil
+		}
 		defer func() { cli.OpenBrowser = origBrowser }()
 
 		// Speed up polling
@@ -73,7 +77,7 @@ func TestLoginCmd(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"device_code":      "dc_test123",
 					"user_code":        "ABCD-1234",
-					"verification_url": "https://texops.example.com/auth/verify",
+					"verification_url": "https://texops.example.com/auth/verify?code=ABCD-1234",
 					"expires_in":       900,
 					"interval":         1,
 				})
@@ -109,6 +113,7 @@ func TestLoginCmd(t *testing.T) {
 		assert.Equal(t, "eyJhbGciOi.test-jwt-token.sig", storedJWT)
 		assert.Contains(t, buf.String(), "ABCD-1234")
 		assert.Contains(t, buf.String(), "Logged in successfully")
+		assert.Equal(t, "https://texops.example.com/auth/verify?code=ABCD-1234", openedURL)
 		assert.True(t, pollCount >= 3, "should have polled at least 3 times")
 	})
 

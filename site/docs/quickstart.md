@@ -47,7 +47,7 @@ Registration is open — running `tx login` creates your account automatically.
 tx login
 ```
 
-A device code appears in your terminal. Open the verification page, enter the code with your email, and click the magic link sent to your inbox.
+The verification page opens in your browser with the device code already filled in — enter your email, then click the magic link sent to your inbox. The code is also shown in your terminal in case the browser does not open.
 
 :::info
 Credentials are stored in your system keyring and persist for 30 days.

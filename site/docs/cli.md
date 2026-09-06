@@ -6,7 +6,7 @@ Complete reference for all `tx` commands, flags, environment variables, and file
 
 ## `tx login`
 
-Authenticate with the TexOps service using the device code flow. A one-time code is displayed and the verification URL is opened in a browser automatically when possible. After authorization completes, the session JWT is stored in the system keyring (or the credentials file as a fallback).
+Authenticate with the TexOps service using the device code flow. A one-time code is displayed and the verification URL is opened in a browser automatically when possible, with the code already filled in. After authorization completes, the session JWT is stored in the system keyring (or the credentials file as a fallback).
 
 ## `tx init`
 
