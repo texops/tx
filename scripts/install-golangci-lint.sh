@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-VERSION="2.11.3"
+VERSION="2.13.2"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BIN_DIR="${ROOT_DIR}/bin"
 BINARY="${BIN_DIR}/golangci-lint"

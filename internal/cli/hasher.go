@@ -6,9 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	ignore "github.com/sabhiram/go-gitignore"
@@ -50,7 +51,7 @@ func CollectFiles(ctx context.Context, dir string) ([]FileEntry, error) {
 		size int64
 	}
 	var found []fileInfo
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -67,25 +68,25 @@ func CollectFiles(ctx context.Context, dir string) ([]FileEntry, error) {
 		}
 
 		checkPath := rel
-		if info.IsDir() {
+		if d.IsDir() {
 			checkPath = rel + "/"
 		}
 
 		if ig.MatchesPath(checkPath) {
-			if info.IsDir() {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if matchesTxignore(txignoreCache, rel, info.IsDir()) {
-			if info.IsDir() {
+		if matchesTxignore(txignoreCache, rel, d.IsDir()) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if info.IsDir() {
+		if d.IsDir() {
 			entry, loadErr := loadTxignore(filepath.Join(dir, rel))
 			if loadErr != nil {
 				return loadErr
@@ -95,7 +96,11 @@ func CollectFiles(ctx context.Context, dir string) ([]FileEntry, error) {
 			}
 		}
 
-		if !info.IsDir() && info.Mode().IsRegular() {
+		if d.Type().IsRegular() {
+			info, infoErr := d.Info()
+			if infoErr != nil {
+				return infoErr
+			}
 			found = append(found, fileInfo{path: rel, size: info.Size()})
 		}
 		return nil
@@ -104,8 +109,8 @@ func CollectFiles(ctx context.Context, dir string) ([]FileEntry, error) {
 		return nil, err
 	}
 
-	sort.Slice(found, func(i, j int) bool {
-		return found[i].path < found[j].path
+	slices.SortFunc(found, func(a, b fileInfo) int {
+		return strings.Compare(a.path, b.path)
 	})
 
 	entries := make([]FileEntry, 0, len(found))

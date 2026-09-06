@@ -19,16 +19,16 @@ linters:
     - durationcheck
     - embeddedstructfieldcheck
     #- err113  # conflicts with wrapcheck; dynamic error context > sentinels for HTTP/validation
-    - errcheck
+    #- errcheck  # TODO: fix 236 issues — unchecked errors
     #- errchkjson  # TODO: fix 3 issues — unchecked JSON encoding errors
     - errname
-    - errorlint  # TODO: fix 2 issues — incorrect error comparison/wrapping [auto-fix]
+    - errorlint
     - exhaustive
     #- exhaustruct  # fights Go's zero-value semantics; unusable with external types
     - exptostd
     - fatcontext
     #- forbidigo  # CLI entrypoints legitimately print to stdout
-    #- forcetypeassert  # TODO: fix 6 issues — type assertions without ok check
+    #- forcetypeassert  # TODO: fix 29 issues — type assertions without ok check
     - funcorder
     #- funlen  # redundant with gocognit; test functions are naturally long
     - ginkgolinter
@@ -36,16 +36,16 @@ linters:
     #- gochecknoglobals  # immutable lookup tables, test knobs, and test exports are fine
     - gochecknoinits
     - gochecksumtype
-    #- gocognit  # TODO: fix 6 issues — high cognitive complexity functions
+    #- gocognit  # TODO: fix 7 issues — high cognitive complexity functions
     #- goconst  # all violations in tests; constant extraction hurts test readability
-    #- gocritic  # TODO: fix 5 issues — bugs, performance, style [auto-fix]
-    #- gocyclo  # TODO: fix 4 issues — high cyclomatic complexity (redundant with gocognit)
+    #- gocritic  # TODO: fix 7 issues — bugs, performance, style [auto-fix]
+    #- gocyclo  # TODO: fix 2 issues — high cyclomatic complexity (redundant with gocognit)
     - godoclint
     - godot
     - godox
     - goheader
     - gomoddirectives
-    - gomodguard
+    - gomodguard_v2
     - goprintffuncname
     - gosec
     - gosmopolitan
@@ -61,56 +61,56 @@ linters:
     #- ireturn  # flags interface returns mandated by external APIs and factory patterns
     #- lll  # struct tags and go-flags options can't reasonably be split
     - loggercheck
-    #- maintidx  # TODO: fix 4 issues — low maintainability index
+    #- maintidx  # TODO: fix 6 issues — low maintainability index
     - makezero
     - mirror
     - misspell
     #- mnd  # contextually obvious numbers are clearer inline than named constants
-    #- modernize  # TODO: fix 4 issues — use modern Go idioms [auto-fix]
+    - modernize
     - musttag
     - nakedret
-    #- nestif  # TODO: fix 8 issues — deeply nested if statements
+    #- nestif  # TODO: fix 10 issues — deeply nested if statements
     #- nilerr  # TODO: fix 1 issue — returning nil when error is non-nil
     - nilnesserr
     #- nilnil  # TODO: fix 1 issue — simultaneous nil error and invalid value return
     #- nlreturn  # conflicts with wsl_v5 which covers these cases
-    #- noctx  # TODO: fix 6 issues — missing context in HTTP calls
+    #- noctx  # TODO: fix 10 issues — missing context in HTTP calls
     #- noinlineerr  # bans idiomatic "if err := ...; err != nil" pattern
     - nolintlint
-    #- nonamedreturns  # TODO: fix 1 issue — named return
+    - nonamedreturns
     - nosprintfhostport
-    #- paralleltest  # TODO: fix 50 issues — tests missing t.Parallel()
-    #- perfsprint  # TODO: fix 6 issues — faster string formatting alternatives [auto-fix]
+    #- paralleltest  # TODO: fix 301 issues — tests missing t.Parallel()
+    #- perfsprint  # TODO: fix 43 issues — faster string formatting alternatives [auto-fix]
     - prealloc
     #- predeclared  # TODO: fix 1 issue — variable shadows predeclared identifier
     - promlinter
     - protogetter
     - reassign
     - recvcheck
-    #- revive  # TODO: fix 50 issues — missing doc comments on exports [auto-fix]
+    #- revive  # TODO: fix 129 issues — missing doc comments on exports [auto-fix]
     - rowserrcheck
     - sloglint
     - spancheck
     - sqlclosecheck
     #- staticcheck  # TODO: fix 3 issues — deprecated API usage [auto-fix]
     #- tagalign  # creates absurdly wide lines with multi-tag structs
-    #- tagliatelle  # TODO: fix 1 issue — struct tag casing
+    #- tagliatelle  # TODO: fix 22 issues — struct tag casing
     - testableexamples
-    #- testifylint  # TODO: fix 12 issues — testify best practices [auto-fix]
+    #- testifylint  # TODO: fix 28 issues — testify best practices [auto-fix]
     - testpackage
     - thelper
     - tparallel
     #- unconvert  # TODO: fix 1 issue — unnecessary type conversion
-    #- unparam  # TODO: fix 4 issues — unused function parameters (interface-mandated)
+    #- unparam  # TODO: fix 3 issues — unused function parameters (interface-mandated)
     - unqueryvet
     - unused
-    #- usestdlibvars  # TODO: fix 14 issues — use stdlib constants [auto-fix]
+    #- usestdlibvars  # TODO: fix 128 issues — use stdlib constants [auto-fix]
     - usetesting
     #- varnamelen  # fights idiomatic Go short names (r, w, b, f)
     - wastedassign
     - whitespace
-    #- wrapcheck  # TODO: fix 34 issues — unwrapped external errors
-    #- wsl_v5  # TODO: fix 45 issues — whitespace formatting [auto-fix]
+    #- wrapcheck  # TODO: fix 86 issues — unwrapped external errors
+    #- wsl_v5  # TODO: fix 624 issues — whitespace formatting [auto-fix]
     - zerologlint
 
   # Explicitly disable default linters that have TODO violations above.

@@ -698,10 +698,10 @@ func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error
 			continue
 		}
 
-		if strings.HasPrefix(line, "event: ") {
-			eventType = line[7:]
-		} else if strings.HasPrefix(line, "data: ") {
-			eventData = line[6:]
+		if after, ok := strings.CutPrefix(line, "event: "); ok {
+			eventType = after
+		} else if after, ok := strings.CutPrefix(line, "data: "); ok {
+			eventData = after
 		}
 	}
 
