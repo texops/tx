@@ -71,3 +71,15 @@ func TestSpinnerModel_Update_TickMsg(t *testing.T) {
 	assert.False(t, sm.finished, "model should not be finished after tick")
 	assert.NotNil(t, cmd, "tick should produce another command")
 }
+
+func TestSpinnerModel_Update_TextMsg(t *testing.T) {
+	model := newSpinnerModel("Loading...", newStyles(true, nil))
+
+	updated, cmd := model.Update(spinnerTextMsg("x"))
+	sm := updated.(spinnerModel)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, "x", sm.message)
+	assert.Contains(t, sm.View(), "x")
+	assert.NotContains(t, sm.View(), "Loading...")
+}

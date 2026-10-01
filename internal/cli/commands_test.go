@@ -1101,6 +1101,165 @@ documents:
 	})
 }
 
+func TestBuildCmd_SandboxStart(t *testing.T) {
+	// startSetup serves a single-document project whose instance answers
+	// /start with start (or 404 when nil) and records instance request paths.
+	startSetup := func(t *testing.T, start http.HandlerFunc) (string, func() []string) {
+		t.Helper()
+
+		var mu sync.Mutex
+		var requests []string
+
+		instSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			requests = append(requests, r.URL.Path)
+			mu.Unlock()
+
+			switch {
+			case r.URL.Path == "/projects/prj_start/start" && r.Method == "POST" && start != nil:
+				start(w, r)
+
+			case r.URL.Path == "/projects/prj_start/sync" && r.Method == "POST":
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]any{"missing": []string{}})
+
+			case r.URL.Path == "/projects/prj_start/build" && r.Method == "POST":
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.Write([]byte("event: done\ndata: {\"status\":\"success\",\"build_id\":\"bld_001\",\"pdfUrl\":\"/projects/prj_start/builds/bld_001/output\"}\n\n"))
+
+			case r.URL.Path == "/projects/prj_start/builds/bld_001/output" && r.Method == "GET":
+				w.Header().Set("Content-Type", "application/pdf")
+				w.Write([]byte("%PDF-1.4 test"))
+
+			default:
+				w.WriteHeader(404)
+			}
+		}))
+		t.Cleanup(instSrv.Close)
+
+		apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.URL.Path == "/api/projects" && r.Method == "POST":
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"id":                   "prj_start",
+					"name":                 "test",
+					"distribution_version": "texlive:2023",
+				})
+			case r.URL.Path == "/api/projects/prj_start/session" && r.Method == "POST":
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]any{
+					"instance_url": instSrv.URL,
+					"jwt":          "test-jwt",
+					"cache_cold":   false,
+				})
+			default:
+				w.WriteHeader(404)
+			}
+		}))
+		t.Cleanup(apiSrv.Close)
+
+		mockKeyringForAuth(t, "test-jwt-token")
+		t.Setenv("TX_API_URL", apiSrv.URL)
+
+		origNewIC := cli.NewInstanceClientFn
+		cli.NewInstanceClientFn = func(instanceURL, jwt string) *cli.InstanceClient {
+			ic := cli.NewInstanceClient(instanceURL, jwt)
+			ic.SetHTTPClient(instSrv.Client())
+			return ic
+		}
+		t.Cleanup(func() { cli.NewInstanceClientFn = origNewIC })
+
+		dir := t.TempDir()
+		configContent := `project_key: "k7Gx9mR2pL4wN8qY5vBt3a"
+texlive: "texlive:2023"
+documents:
+  - name: paper
+    main: paper.tex
+`
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(configContent), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600))
+
+		return dir, func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]string(nil), requests...)
+		}
+	}
+
+	sse := func(events ...string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			for _, e := range events {
+				w.Write([]byte(e + "\n\n"))
+			}
+		}
+	}
+
+	t.Run("shows sandbox start progress before sync", func(t *testing.T) {
+		dir, requests := startSetup(t, sse(
+			`event: log`+"\n"+`data: {"message":"setting up TeX Live 2023..."}`,
+			`event: done`+"\n"+`data: {"status":"success"}`,
+		))
+
+		ui, buf := testUI()
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "setting up TeX Live 2023...")
+		assert.Contains(t, output, "Sandbox ready")
+		assert.Less(t, strings.Index(output, "Sandbox ready"), strings.Index(output, "Syncing with instance..."))
+		assert.Equal(t, []string{
+			"/projects/prj_start/start",
+			"/projects/prj_start/sync",
+			"/projects/prj_start/build",
+			"/projects/prj_start/builds/bld_001/output",
+		}, requests())
+	})
+
+	t.Run("prints nothing when the sandbox is already running", func(t *testing.T) {
+		dir, requests := startSetup(t, sse(`event: done`+"\n"+`data: {"status":"success"}`))
+
+		ui, buf := testUI()
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		require.NoError(t, err)
+
+		assert.NotContains(t, buf.String(), "Sandbox ready")
+		assert.Contains(t, requests(), "/projects/prj_start/start")
+		assert.FileExists(t, filepath.Join(dir, "paper.pdf"))
+	})
+
+	t.Run("skips start when the server does not support it", func(t *testing.T) {
+		dir, requests := startSetup(t, nil)
+
+		ui, buf := testUI()
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		require.NoError(t, err)
+
+		assert.NotContains(t, buf.String(), "Sandbox ready")
+		assert.NotContains(t, buf.String(), "Failed to start sandbox")
+		assert.Contains(t, requests(), "/projects/prj_start/sync")
+		assert.FileExists(t, filepath.Join(dir, "paper.pdf"))
+	})
+
+	t.Run("fails the build when the sandbox cannot start", func(t *testing.T) {
+		dir, requests := startSetup(t, sse(
+			`event: log`+"\n"+`data: {"message":"setting up TeX Live 2023..."}`,
+			`event: done`+"\n"+`data: {"status":"error","message":"failed to set up TeX Live 2023"}`,
+		))
+
+		ui, buf := testUI()
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		require.Error(t, err)
+
+		assert.Contains(t, buf.String(), "Failed to start sandbox: failed to set up TeX Live 2023")
+		assert.NotContains(t, buf.String(), "Sandbox ready")
+		assert.Equal(t, []string{"/projects/prj_start/start"}, requests())
+		assert.NoFileExists(t, filepath.Join(dir, "paper.pdf"))
+	})
+}
+
 func TestBuildCmd_MultiDocument(t *testing.T) {
 	// multiDocSetup creates a common build environment for multi-document tests.
 	// It returns the temp dir and tracks session/build requests.

@@ -238,6 +238,79 @@ func TestInstanceClient_Sync(t *testing.T) {
 	})
 }
 
+func TestInstanceClient_Start(t *testing.T) {
+	t.Run("streams log messages and succeeds", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/projects/prj_123/start", r.URL.Path)
+			assert.Equal(t, "Bearer jwt-token", r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "event: log\ndata: {\"message\":\"setting up TeX Live 2024...\"}\n\n")
+			fmt.Fprint(w, "event: log\ndata: {\"message\":\"sandbox ready in 1200 ms\"}\n\n")
+			fmt.Fprint(w, "event: done\ndata: {\"status\":\"success\"}\n\n")
+		}))
+		defer srv.Close()
+
+		client := cli.NewInstanceClient(srv.URL, "jwt-token")
+		client.SetHTTPClient(srv.Client())
+		var logs []string
+		err := client.Start(t.Context(), "prj_123", func(msg string) { logs = append(logs, msg) })
+		require.NoError(t, err)
+		assert.Equal(t, []string{"setting up TeX Live 2024...", "sandbox ready in 1200 ms"}, logs)
+	})
+
+	t.Run("returns the done message on failure", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "event: done\ndata: {\"status\":\"error\",\"message\":\"failed to set up TeX Live 2024\"}\n\n")
+		}))
+		defer srv.Close()
+
+		client := cli.NewInstanceClient(srv.URL, "jwt-token")
+		client.SetHTTPClient(srv.Client())
+		err := client.Start(t.Context(), "prj_123", nil)
+		assert.EqualError(t, err, "failed to set up TeX Live 2024")
+	})
+
+	t.Run("returns ErrStartUnsupported on 404", func(t *testing.T) {
+		srv := httptest.NewServer(http.NotFoundHandler())
+		defer srv.Close()
+
+		client := cli.NewInstanceClient(srv.URL, "jwt-token")
+		client.SetHTTPClient(srv.Client())
+		err := client.Start(t.Context(), "prj_123", nil)
+		assert.ErrorIs(t, err, cli.ErrStartUnsupported)
+	})
+
+	t.Run("returns an error on other statuses", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(500)
+			w.Write([]byte("container exploded"))
+		}))
+		defer srv.Close()
+
+		client := cli.NewInstanceClient(srv.URL, "jwt-token")
+		client.SetHTTPClient(srv.Client())
+		err := client.Start(t.Context(), "prj_123", nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "(500)")
+		assert.Contains(t, err.Error(), "container exploded")
+	})
+
+	t.Run("fails when the stream ends without done", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "event: log\ndata: {\"message\":\"waiting for sandbox... 10s\"}\n\n")
+		}))
+		defer srv.Close()
+
+		client := cli.NewInstanceClient(srv.URL, "jwt-token")
+		client.SetHTTPClient(srv.Client())
+		err := client.Start(t.Context(), "prj_123", nil)
+		assert.EqualError(t, err, "Stream ended unexpectedly")
+	})
+}
+
 func TestInstanceClient_Upload(t *testing.T) {
 	t.Run("sends tar archive with correct content type", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

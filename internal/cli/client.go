@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -417,6 +418,41 @@ func NewInstanceClient(instanceURL, jwt string) *InstanceClient {
 
 func (c *InstanceClient) SetHTTPClient(hc *http.Client) {
 	c.httpClient = hc
+}
+
+// ErrStartUnsupported is returned by Start when the server has no start endpoint.
+var ErrStartUnsupported = errors.New("server does not support sandbox start")
+
+// Start brings the project's sandbox up, calling onLog with each progress message.
+func (c *InstanceClient) Start(ctx context.Context, projectID string, onLog func(string)) error {
+	u := fmt.Sprintf("%s/projects/%s/start", c.baseURL, projectID)
+	req, err := http.NewRequestWithContext(ctx, "POST", u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.jwt)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrStartUnsupported
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("sandbox start failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+	}
+
+	done, err := ParseSSEStream(resp.Body, onLog)
+	if err != nil {
+		return err
+	}
+	if done.Status != "success" {
+		return errors.New(done.Message)
+	}
+	return nil
 }
 
 func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []FileEntry) (SyncResult, error) {

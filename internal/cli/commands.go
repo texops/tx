@@ -738,6 +738,16 @@ func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
 
 		inst := NewInstanceClientFn(session.InstanceURL, session.JWT)
 
+		if err := startSandbox(ctx, p.ui, inst, p.projectID); err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			for _, doc := range group.docs {
+				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
+			}
+			continue
+		}
+
 		sp = p.ui.Spin("Syncing with instance...")
 		syncResult, err := inst.Sync(ctx, p.projectID, files)
 		if err != nil {
@@ -775,6 +785,38 @@ func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
 	}
 
 	return results, nil
+}
+
+// startSandbox waits for the version's sandbox, showing its progress only
+// when it was not already running.
+func startSandbox(ctx context.Context, ui *UI, inst *InstanceClient, projectID string) error {
+	var sp *Spinner
+	err := inst.Start(ctx, projectID, func(msg string) {
+		if sp == nil {
+			sp = ui.Spin(msg)
+		} else {
+			sp.Update(msg)
+		}
+	})
+	switch {
+	case errors.Is(err, ErrStartUnsupported):
+		err = nil
+	case err != nil && ctx.Err() != nil:
+		if sp != nil {
+			sp.Cancel()
+		}
+		return ctx.Err()
+	}
+	if sp != nil {
+		if err != nil {
+			sp.Fail(fmt.Sprintf("Failed to start sandbox: %s", err))
+		} else {
+			sp.Stop("Sandbox ready")
+		}
+	} else if err != nil {
+		ui.Errorf("Failed to start sandbox: %s", err)
+	}
+	return err
 }
 
 // handleUpload processes file sync results and uploads missing files.

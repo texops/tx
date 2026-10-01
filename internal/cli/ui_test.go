@@ -203,6 +203,15 @@ func TestSpinner_NonTTY_Stop(t *testing.T) {
 	assert.Equal(t, "Session acquired\n", buf.String())
 }
 
+func TestSpinner_Update_NonTTY(t *testing.T) {
+	buf := &bytes.Buffer{}
+	ui := cli.NewUIWithOptions(buf, false, nil)
+	sp := ui.Spin("setting up TeX Live 2024...")
+	buf.Reset()
+	sp.Update("waiting for sandbox... 10s")
+	assert.Equal(t, "waiting for sandbox... 10s\n", buf.String())
+}
+
 func TestSpinner_NonTTY_Fail(t *testing.T) {
 	buf := &bytes.Buffer{}
 	ui := cli.NewUIWithOptions(buf, false, nil)

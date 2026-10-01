@@ -246,6 +246,15 @@ func (ui *UI) Spin(msg string) *Spinner {
 	return s
 }
 
+// Update replaces the spinner's message. In non-TTY mode it prints the message.
+func (s *Spinner) Update(msg string) {
+	if s.program != nil {
+		s.program.Send(spinnerTextMsg(msg))
+		return
+	}
+	fmt.Fprintln(s.ui.out, msg)
+}
+
 // Stop ends the spinner and prints a success message.
 func (s *Spinner) Stop(successMsg string) {
 	if s.program != nil {
@@ -281,6 +290,9 @@ func (s *Spinner) Cancel() {
 		<-s.done
 	}
 }
+
+// spinnerTextMsg replaces the spinner's message.
+type spinnerTextMsg string
 
 // spinnerDoneMsg is sent to the bubbletea program to signal completion.
 type spinnerDoneMsg struct {
@@ -319,6 +331,9 @@ func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.finalMsg = msg.style.Render(msg.text)
 		}
 		return m, tea.Quit
+	case spinnerTextMsg:
+		m.message = string(msg)
+		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
