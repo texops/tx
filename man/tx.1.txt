@@ -249,6 +249,9 @@ FILE UPLOADS
      •   Only files the server reports as missing are uploaded, using hash-
          based comparison.
 
+     •   Missing files are uploaded in batches of at most 32 MiB of file data;
+         a larger file is uploaded on its own.
+
 ENVIRONMENT
      TX_API_TOKEN
              API token for authentication.  Takes priority over all other

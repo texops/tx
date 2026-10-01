@@ -376,6 +376,9 @@ are supported.
 .It
 Only files the server reports as missing are uploaded, using hash-based
 comparison.
+.It
+Missing files are uploaded in batches of at most 32 MiB of file data; a
+larger file is uploaded on its own.
 .El
 .Sh ENVIRONMENT
 .Bl -tag -width Ds
