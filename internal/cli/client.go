@@ -455,49 +455,87 @@ func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []Fil
 	return result, nil
 }
 
+const maxUploadChunkBytes = 32 << 20
+
+var uploadChunkBytes int64 = maxUploadChunkBytes
+
+type uploadChunk struct {
+	paths   []string
+	tarSize int64
+}
+
+// Upload sends filePaths as a sequence of tar archives, each holding at most
+// uploadChunkBytes of file data (a larger file is sent alone).
 func (c *InstanceClient) Upload(ctx context.Context, projectID, projectDir string, filePaths []string, onProgress func(sent, total int64)) error {
 	if len(filePaths) == 0 {
 		return nil
 	}
 
-	tarData, err := createTar(ctx, projectDir, filePaths)
+	chunks, total, err := planUploadChunks(projectDir, filePaths, uploadChunkBytes)
 	if err != nil {
 		return err
 	}
 
-	u := fmt.Sprintf("%s/projects/%s/upload", c.baseURL, projectID)
+	var sent int64
+	for _, chunk := range chunks {
+		tarData, err := createTar(ctx, projectDir, chunk.paths)
+		if err != nil {
+			return err
+		}
 
-	var body io.Reader = bytes.NewReader(tarData)
-	totalSize := int64(len(tarData))
+		var onSent func(int64)
+		if onProgress != nil {
+			base := sent
+			onSent = func(n int64) {
+				onProgress(min(base+n, total), total)
+			}
+		}
+		if err := c.uploadTar(ctx, projectID, tarData, onSent); err != nil {
+			return err
+		}
+		sent += int64(len(tarData))
+	}
 
 	if onProgress != nil {
-		body = &progressReader{
-			reader: bytes.NewReader(tarData),
-			total:  totalSize,
-			onUpdate: func(fraction float64) {
-				onProgress(int64(fraction*float64(totalSize)), totalSize)
-			},
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", u, body)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.jwt)
-	req.Header.Set("Content-Type", "application/x-tar")
-	req.ContentLength = totalSize
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upload failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		onProgress(total, total)
 	}
 	return nil
+}
+
+func planUploadChunks(dir string, filePaths []string, limit int64) ([]uploadChunk, int64, error) {
+	var chunks []uploadChunk
+	var cur uploadChunk
+	var curData, total int64
+
+	flush := func() {
+		cur.tarSize += 2 * tarBlockSize
+		total += cur.tarSize
+		chunks = append(chunks, cur)
+		cur, curData = uploadChunk{}, 0
+	}
+
+	for _, fp := range filePaths {
+		info, err := os.Stat(filepath.Join(dir, fp))
+		if err != nil {
+			return nil, 0, err
+		}
+		size := info.Size()
+
+		if len(cur.paths) > 0 && curData+size > limit {
+			flush()
+		}
+
+		hdrSize, err := tarHeaderSize(tarFileHeader(fp, size))
+		if err != nil {
+			return nil, 0, err
+		}
+		cur.paths = append(cur.paths, fp)
+		cur.tarSize += hdrSize + (size+tarBlockSize-1)/tarBlockSize*tarBlockSize
+		curData += size
+	}
+	flush()
+
+	return chunks, total, nil
 }
 
 func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarData []byte) error {
@@ -626,6 +664,42 @@ func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, ou
 	return writeFilePreserveInode(resp.Body, outputPath)
 }
 
+func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarData []byte, onSent func(int64)) error {
+	u := fmt.Sprintf("%s/projects/%s/upload", c.baseURL, projectID)
+
+	var body io.Reader = bytes.NewReader(tarData)
+	size := int64(len(tarData))
+
+	if onSent != nil {
+		body = &progressReader{
+			reader: bytes.NewReader(tarData),
+			total:  size,
+			onUpdate: func(fraction float64) {
+				onSent(int64(fraction * float64(size)))
+			},
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.jwt)
+	req.Header.Set("Content-Type", "application/x-tar")
+	req.ContentLength = size
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("upload failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+	}
+	return nil
+}
+
 func writeFilePreserveInode(r io.Reader, outputPath string) error {
 	tmp, err := os.CreateTemp(filepath.Dir(outputPath), ".tx-download-*.tmp")
 	if err != nil {
@@ -737,12 +811,7 @@ func createTar(ctx context.Context, dir string, filePaths []string) ([]byte, err
 			return nil, err
 		}
 
-		hdr := &tar.Header{
-			Name: fp,
-			Mode: 0o644,
-			Size: int64(len(data)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
+		if err := tw.WriteHeader(tarFileHeader(fp, int64(len(data)))); err != nil {
 			return nil, err
 		}
 		if _, err := tw.Write(data); err != nil {
@@ -754,4 +823,31 @@ func createTar(ctx context.Context, dir string, filePaths []string) ([]byte, err
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+const tarBlockSize = 512
+
+func tarFileHeader(name string, size int64) *tar.Header {
+	return &tar.Header{
+		Name: name,
+		Mode: 0o644,
+		Size: size,
+	}
+}
+
+type countingWriter struct {
+	n int64
+}
+
+func (w *countingWriter) Write(p []byte) (int, error) {
+	w.n += int64(len(p))
+	return len(p), nil
+}
+
+func tarHeaderSize(hdr *tar.Header) (int64, error) {
+	var cw countingWriter
+	if err := tar.NewWriter(&cw).WriteHeader(hdr); err != nil {
+		return 0, err
+	}
+	return cw.n, nil
 }

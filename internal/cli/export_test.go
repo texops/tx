@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"io"
+	"testing"
 )
 
 var (
@@ -65,4 +66,11 @@ func GetTextInputModelState(m textInputModel) TextInputModelState {
 		Finished:  m.finished,
 		Cancelled: m.cancelled,
 	}
+}
+
+func SetUploadChunkBytes(t *testing.T, n int64) {
+	t.Helper()
+	orig := uploadChunkBytes
+	uploadChunkBytes = n
+	t.Cleanup(func() { uploadChunkBytes = orig })
 }
