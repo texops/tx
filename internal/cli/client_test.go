@@ -144,7 +144,6 @@ func TestAPIClient_GetSession(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"instance_url": "https://10.0.0.1:8443",
 				"jwt":          "eyJhbGciOi...",
-				"cache_cold":   true,
 			})
 		}))
 		defer srv.Close()
@@ -154,7 +153,6 @@ func TestAPIClient_GetSession(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "https://10.0.0.1:8443", session.InstanceURL)
 		assert.Equal(t, "eyJhbGciOi...", session.JWT)
-		assert.True(t, session.CacheCold)
 	})
 
 	t.Run("sends texlive in request body", func(t *testing.T) {
@@ -168,7 +166,6 @@ func TestAPIClient_GetSession(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{
 				"instance_url": "https://10.0.0.2:8443",
 				"jwt":          "jwt-2019",
-				"cache_cold":   false,
 			})
 		}))
 		defer srv.Close()
@@ -808,7 +805,6 @@ func TestE2E_TwoClients(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt-token",
-					"cache_cold":   false,
 				})
 
 			default:

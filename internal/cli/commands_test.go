@@ -695,7 +695,6 @@ func TestBuildCmd(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -787,7 +786,6 @@ documents:
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -978,7 +976,6 @@ func TestBuildCmd_NoCache(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -1063,7 +1060,6 @@ documents:
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -1151,7 +1147,6 @@ func TestBuildCmd_SandboxStart(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -1354,7 +1349,6 @@ func TestBuildCmd_MultiDocument(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -1613,7 +1607,6 @@ func TestBuildCmd_Compiler(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -1704,7 +1697,6 @@ documents:
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)
@@ -1797,7 +1789,6 @@ documents:
 				json.NewEncoder(w).Encode(map[string]any{
 					"instance_url": instSrv.URL,
 					"jwt":          "test-jwt",
-					"cache_cold":   false,
 				})
 			default:
 				w.WriteHeader(404)

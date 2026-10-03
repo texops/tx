@@ -38,7 +38,6 @@ type APIClient struct {
 type SessionResponse struct {
 	InstanceURL string `json:"instance_url"`
 	JWT         string `json:"jwt"`
-	CacheCold   bool   `json:"cache_cold"`
 }
 
 type CreateProjectResponse struct {
