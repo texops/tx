@@ -18,7 +18,7 @@
 .Cm build
 .Op Fl -live
 .Op Fl -no-cache
-.Op Fl -log Ns = Ns Cm stdout | file
+.Op Fl -log Ns = Ns Cm terminal | file
 .Op Ar name ...
 .Nm
 .Cm status
@@ -187,9 +187,9 @@ Otherwise the build fails with exit status 4.
 .Pp
 Flags:
 .Bl -tag -width Ds
-.It Fl -log Ns = Ns Cm stdout | file
+.It Fl -log Ns = Ns Cm terminal | file
 Where the LaTeX log goes.
-.Cm stdout
+.Cm terminal
 streams it to standard error while the document compiles and saves nothing.
 .Cm file
 streams nothing and saves the full log to
@@ -202,7 +202,7 @@ under a coding agent
 or with
 .Fl -json ,
 and to
-.Cm stdout
+.Cm terminal
 otherwise.
 .It Fl -live
 Watch for file changes and rebuild automatically.

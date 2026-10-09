@@ -436,7 +436,7 @@ func TestBuildLogMode(t *testing.T) {
 		r := runTx(t, f, "build", "--log", "stderr")
 
 		assert.Equal(t, cli.ExitUsage, r.code, r)
-		assert.Equal(t, "Invalid value `stderr' for option `--log'. Allowed values are: stdout or file\n", r.stderr, r)
+		assert.Equal(t, "Invalid value `stderr' for option `--log'. Allowed values are: terminal or file\n", r.stderr, r)
 		assert.Empty(t, r.requests, r)
 	})
 
@@ -455,14 +455,14 @@ func TestBuildLogMode(t *testing.T) {
 		assert.Contains(t, r.stderr, "Last 3 lines of .texops/logs/paper.log:\n", r)
 	})
 
-	t.Run("--log=stdout overrides agent detection", func(t *testing.T) {
+	t.Run("--log=terminal overrides agent detection", func(t *testing.T) {
 		t.Setenv("CLAUDECODE", "1")
 		f := newFakeTexOps(t)
 		f.done["paper.tex"] = latexErrorDone()
 		f.logs["bld_1"] = numberedLog(3)
 		projectDir(t, projectConfig)
 
-		r := runTx(t, f, "build", "paper", "--log", "stdout")
+		r := runTx(t, f, "build", "paper", "--log", "terminal")
 
 		require.Equal(t, cli.ExitBuildFailed, r.code, r)
 		assert.Contains(t, r.stderr, "    latexmk output for paper.tex\n", r)
@@ -587,13 +587,13 @@ func TestBuildDiagnosticsJSON(t *testing.T) {
 		assert.Equal(t, numberedLog(2), readFile(t, filepath.Join(".texops", "logs", "paper.log"), r), r)
 	})
 
-	t.Run("--json with --log=stdout writes no log file", func(t *testing.T) {
+	t.Run("--json with --log=terminal writes no log file", func(t *testing.T) {
 		f := newFakeTexOps(t)
 		f.done["paper.tex"] = latexErrorDone()
 		f.logs["bld_1"] = numberedLog(3)
 		projectDir(t, projectConfig)
 
-		r := runTx(t, f, "build", "paper", "--json", "--log=stdout")
+		r := runTx(t, f, "build", "paper", "--json", "--log=terminal")
 
 		require.Equal(t, cli.ExitBuildFailed, r.code, r)
 		var doc struct {

@@ -49,7 +49,7 @@ If `.texops.yaml` does not exist and both stdin and stdout are a TTY, an interac
 | Flag | Description |
 |------|-------------|
 | `--no-cache` | Rebuild without using the remote build cache. |
-| `--log=stdout\|file` | Where the LaTeX log goes. `stdout` streams it while the document compiles (to stderr, next to the progress lines) and saves nothing. `file` streams nothing and saves the full log to `.texops/logs/<doc>.log` after each build. Defaults to `file` under a coding agent (see [`TX_AGENT`](#environment-variables)) or with `--json`, and to `stdout` otherwise. |
+| `--log=terminal\|file` | Where the LaTeX log goes. `terminal` streams it while the document compiles (to stderr, next to the progress lines) and saves nothing. `file` streams nothing and saves the full log to `.texops/logs/<doc>.log` after each build. Defaults to `file` under a coding agent (see [`TX_AGENT`](#environment-variables)) or with `--json`, and to `terminal` otherwise. |
 | `--live` | Watch for file changes and rebuild automatically. On each change, files are re-synced, the document is rebuilt, and the output PDF is rewritten in place so viewers like Skim refresh automatically. Runs until interrupted with Ctrl+C, so it is meant for people, not for scripts or agents. Cannot be combined with `--json` (exit `2`). |
 
 ### Diagnostics

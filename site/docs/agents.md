@@ -71,7 +71,7 @@ Every field is described in the [CLI reference](cli.md#json-output).
 
 When `tx` detects a coding agent, `tx build` saves the full LaTeX log to `.texops/logs/<doc>.log` instead of streaming it, and prints only the diagnostics and, on failure, the last 20 lines of the log. `--json` does the same. `.texops/` ignores itself in Git and is never uploaded.
 
-`tx` recognizes an agent by `AI_AGENT`, `CLAUDECODE`, `CODEX_THREAD_ID`, `CURSOR_AGENT` or `GEMINI_CLI` in the environment. Set `TX_AGENT=none` to turn detection off, or pass `--log=stdout` or `--log=file` to choose explicitly.
+`tx` recognizes an agent by `AI_AGENT`, `CLAUDECODE`, `CODEX_THREAD_ID`, `CURSOR_AGENT` or `GEMINI_CLI` in the environment. Set `TX_AGENT=none` to turn detection off, or pass `--log=terminal` or `--log=file` to choose explicitly.
 
 ## Exit codes
 

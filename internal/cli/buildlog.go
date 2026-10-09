@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	LogStdout = "stdout"
-	LogFile   = "file"
+	LogTerminal = "terminal"
+	LogFile     = "file"
 )
 
 const logTailLines = 20
 
 // resolveLogMode returns the --log value, defaulting to file under a coding
-// agent or with --json and to stdout otherwise.
+// agent or with --json and to terminal otherwise.
 func resolveLogMode(flag string, jsonMode bool, getenv func(string) string) string {
 	if flag != "" {
 		return flag
@@ -29,7 +29,7 @@ func resolveLogMode(flag string, jsonMode bool, getenv func(string) string) stri
 	if jsonMode || DetectAgent(getenv) != "" {
 		return LogFile
 	}
-	return LogStdout
+	return LogTerminal
 }
 
 // logFilePaths maps each document name to the project-relative path of its

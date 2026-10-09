@@ -102,7 +102,7 @@ type BuildCmd struct {
 	} `positional-args:"true"`
 	NoCache bool   `long:"no-cache" description:"Clear the remote build cache and rebuild from scratch"`
 	Live    bool   `long:"live" description:"Watch for changes and rebuild until interrupted with Ctrl+C; for people, not for scripts or agents; cannot be combined with --json"`
-	Log     string `long:"log" choice:"stdout" choice:"file" description:"Where the LaTeX log goes: stdout streams it, file saves it to .texops/logs/<doc>.log (default: file under a coding agent or with --json, otherwise stdout)"`
+	Log     string `long:"log" choice:"terminal" choice:"file" description:"Where the LaTeX log goes: terminal streams it to stderr, file saves it to .texops/logs/<doc>.log (default: file under a coding agent or with --json, otherwise terminal)"`
 	UI      *UI    `no-flag:"true"`
 }
 

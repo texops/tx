@@ -681,7 +681,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, cli.LogStdout, ui)
+		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, cli.LogTerminal, ui)
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindBuildFailed, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())
@@ -693,7 +693,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, cli.LogStdout, ui)
+		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, cli.LogTerminal, ui)
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())
@@ -707,7 +707,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogStdout, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 
 		require.Error(t, err, buf.String())
 		assert.Equal(t, cli.KindNetwork, cli.AsExitError(err).Kind, buf.String())
@@ -720,7 +720,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogStdout, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindConfig, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())

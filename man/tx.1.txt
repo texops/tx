@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
      tx login [--no-browser] [--timeout duration]
      tx init [--texlive version] [--compiler name] [--main file]
-     tx build [--live] [--no-cache] [--log=stdout | file] [name ...]
+     tx build [--live] [--no-cache] [--log=terminal | file] [name ...]
      tx status
      tx token create [--name name] [--expires-in duration] [--no-expiry]
         [name]
@@ -120,13 +120,13 @@ COMMANDS
 
      Flags:
 
-     --log=stdout | file
-             Where the LaTeX log goes.  stdout streams it to standard error
+     --log=terminal | file
+             Where the LaTeX log goes.  terminal streams it to standard error
              while the document compiles and saves nothing.  file streams
              nothing and saves the full log to .texops/logs/<doc>.log after
              each build; a failed build also prints the last 20 lines of the
              log.  Defaults to file under a coding agent (see TX_AGENT) or
-             with --json, and to stdout otherwise.
+             with --json, and to terminal otherwise.
 
      --live  Watch for file changes and rebuild automatically.  After the
              initial build, the command monitors the project directory for

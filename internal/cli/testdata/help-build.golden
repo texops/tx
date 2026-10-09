@@ -16,23 +16,23 @@ Examples:
   tx build --live
 
 Application Options:
-      --json                  Print exactly one JSON document to stdout, also
-                              on failure; progress and errors go to stderr
+      --json                    Print exactly one JSON document to stdout, also
+                                on failure; progress and errors go to stderr
 
 Help Options:
-  -h, --help                  Show this help message
+  -h, --help                    Show this help message
 
 [build command options]
-          --no-cache          Clear the remote build cache and rebuild from
-                              scratch
-          --live              Watch for changes and rebuild until interrupted
-                              with Ctrl+C; for people, not for scripts or
-                              agents; cannot be combined with --json
-          --log=[stdout|file] Where the LaTeX log goes: stdout streams it, file
-                              saves it to .texops/logs/<doc>.log (default: file
-                              under a coding agent or with --json, otherwise
-                              stdout)
+          --no-cache            Clear the remote build cache and rebuild from
+                                scratch
+          --live                Watch for changes and rebuild until interrupted
+                                with Ctrl+C; for people, not for scripts or
+                                agents; cannot be combined with --json
+          --log=[terminal|file] Where the LaTeX log goes: terminal streams it
+                                to stderr, file saves it to
+                                .texops/logs/<doc>.log (default: file under a
+                                coding agent or with --json, otherwise terminal)
 
 [build command arguments]
-  name:                       Documents to build, by their name in
-                              .texops.yaml (default: all)
+  name:                         Documents to build, by their name in
+                                .texops.yaml (default: all)
