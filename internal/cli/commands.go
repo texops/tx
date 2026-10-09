@@ -92,6 +92,7 @@ type BuildCmd struct {
 	Args    struct{ Names []string } `positional-args:"true"`
 	NoCache bool                     `long:"no-cache" description:"Clear build cache and rebuild from scratch"`
 	Live    bool                     `long:"live" description:"Watch for changes and rebuild automatically"`
+	Log     string                   `long:"log" choice:"stdout" choice:"file" description:"Where the LaTeX log goes: stdout streams it, file saves it to .texops/logs/<doc>.log (default: file under a coding agent or with --json, otherwise stdout)"`
 	UI      *UI                      `no-flag:"true"`
 }
 
@@ -129,6 +130,8 @@ type buildParams struct {
 	docs      []Document
 	api       *APIClient
 	noCache   bool
+	logMode   string
+	logPaths  map[string]string
 	ui        *UI
 	projectID string
 }
@@ -591,7 +594,8 @@ func (cmd *BuildCmd) Execute(args []string) error {
 	} else {
 		ctx = context.Background()
 	}
-	err = RunBuild(ctx, dir, cmd.Args.Names, cmd.NoCache, cmd.Live, ui)
+	logMode := resolveLogMode(cmd.Log, ui.JSON(), os.Getenv)
+	err = RunBuild(ctx, dir, cmd.Args.Names, cmd.NoCache, cmd.Live, logMode, ui)
 	if cmd.Live && ctx.Err() != nil {
 		return nil
 	}
@@ -600,7 +604,7 @@ func (cmd *BuildCmd) Execute(args []string) error {
 
 var errInitDeclined = errors.New("no project config found; run `tx init` to set up your project")
 
-func runBuild(ctx context.Context, dir string, names []string, noCache bool, live bool, ui *UI) error {
+func runBuild(ctx context.Context, dir string, names []string, noCache, live bool, logMode string, ui *UI) error {
 	buildStart := time.Now()
 
 	configPath := filepath.Join(dir, ".texops.yaml")
@@ -694,6 +698,8 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 		docs:      docs,
 		api:       api,
 		noCache:   noCache,
+		logMode:   logMode,
+		logPaths:  logFilePaths(config.Documents),
 		ui:        ui,
 		projectID: projectID,
 	}
@@ -826,7 +832,7 @@ func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
 		}
 
 		for _, doc := range group.docs {
-			r := buildDocument(ctx, p.ui, inst, p.projectID, p.dir, doc, p.noCache)
+			r := buildDocument(ctx, p, inst, doc)
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
@@ -920,30 +926,57 @@ func handleUpload(ctx context.Context, ui *UI, inst *InstanceClient, projectID, 
 }
 
 // buildDocument builds a single document and returns the result.
-func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID, dir string, doc Document, noCache bool) docResult {
+func buildDocument(ctx context.Context, p buildParams, inst *InstanceClient, doc Document) docResult {
+	ui := p.ui
 	ui.Status(fmt.Sprintf("Building %q (%s)...", doc.Name, docMainPath(doc)))
 	var buildOptions map[string]string
-	if noCache {
+	if p.noCache {
 		buildOptions = map[string]string{"no_cache": "true"}
 	}
 	compileStart := time.Now()
-	fail := func(err error, reason string) docResult {
-		r := failedDoc(doc, err, reason)
+	streamed := &lineTail{n: logTailLines}
+	logRel := p.logPaths[doc.Name]
+	if p.logMode == LogFile {
+		if err := removeBuildLog(p.dir, logRel); err != nil {
+			ui.DimInfo(fmt.Sprintf("Could not remove the previous build log: %s", err))
+		}
+	}
+	result, err := inst.Build(ctx, p.projectID, doc.Main, doc.Directory, doc.Texlive, doc.Compiler, buildOptions, func(line string) {
+		if p.logMode == LogFile {
+			streamed.add(line)
+			return
+		}
+		ui.StreamLog(line)
+	}, ui.Status)
+	if err != nil {
+		ui.Errorf("Build request failed: %s", err)
+		r := failedDoc(doc, err, failureReason(err, "internal"))
 		r.Duration = time.Since(compileStart)
 		return r
 	}
-	result, err := inst.Build(ctx, projectID, doc.Main, doc.Directory, doc.Texlive, doc.Compiler, buildOptions, func(line string) {
-		ui.StreamLog(line)
-	})
-	if err != nil {
-		ui.Errorf("Build request failed: %s", err)
-		return fail(err, failureReason(err, "internal"))
+
+	var logPath string
+	if p.logMode == LogFile && result.LogURL != "" {
+		if err := saveBuildLog(ctx, inst, p.dir, logRel, result.LogURL); err == nil {
+			logPath = logRel
+		} else if ctx.Err() == nil {
+			ui.DimInfo(fmt.Sprintf("Could not save the build log: %s", err))
+		}
+	}
+	fail := func(err error, reason string) docResult {
+		r := failedDoc(doc, err, reason)
+		r.BuildID = result.BuildID
+		r.Log = logPath
+		r.Diagnostics = result.Diagnostics
+		r.Truncated = result.Truncated
+		r.Duration = time.Since(compileStart)
+		return r
 	}
 
 	if result.Status == "success" && result.PdfURL != "" {
 		compileElapsed := time.Since(compileStart)
 		ui.StepSuccess(fmt.Sprintf("Build complete (%.1fs)", compileElapsed.Seconds()))
-		outputPath := filepath.Join(dir, doc.Output)
+		outputPath := filepath.Join(p.dir, doc.Output)
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
 			return fail(fmt.Errorf("cannot create output directory: %w", err), "internal")
 		}
@@ -952,11 +985,9 @@ func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID,
 		}
 
 		sp := ui.Spin(fmt.Sprintf("Downloading %s...", doc.Output))
-		if err := inst.DownloadPDF(ctx, projectID, result.BuildID, outputPath); err != nil {
+		if err := inst.DownloadPDF(ctx, p.projectID, result.BuildID, outputPath); err != nil {
 			sp.Fail(fmt.Sprintf("Download failed: %s", err))
-			r := fail(err, failureReason(err, "internal"))
-			r.BuildID = result.BuildID
-			return r
+			return fail(err, failureReason(err, "internal"))
 		}
 
 		info, _ := os.Stat(outputPath)
@@ -968,23 +999,27 @@ func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID,
 		}
 		sp.Stop(sizeInfo)
 		return docResult{
-			Name:     doc.Name,
-			Main:     docMainPath(doc),
-			Output:   doc.Output,
-			Success:  true,
-			BuildID:  result.BuildID,
-			Duration: time.Since(compileStart),
+			Name:        doc.Name,
+			Main:        docMainPath(doc),
+			Output:      doc.Output,
+			Success:     true,
+			BuildID:     result.BuildID,
+			Log:         logPath,
+			Diagnostics: result.Diagnostics,
+			Truncated:   result.Truncated,
+			Duration:    time.Since(compileStart),
 		}
 	}
 
+	if p.logMode == LogFile {
+		printLogTail(ui, p.dir, logPath, streamed)
+	}
 	msg := result.Message
 	if msg == "" {
 		msg = "unknown error"
 	}
 	ui.Errorf("Build failed: %s", msg)
-	r := fail(buildFailureError(result, fmt.Errorf("build failed: %s", msg)), buildFailureReason(result))
-	r.BuildID = result.BuildID
-	return r
+	return fail(buildFailureError(result, fmt.Errorf("build failed: %s", msg)), buildFailureReason(result))
 }
 
 // docNames returns a comma-separated list of document names.

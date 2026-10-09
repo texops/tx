@@ -130,3 +130,57 @@ func TestDownloadPDF_FailureLeavesOriginalIntact(t *testing.T) {
 		}
 	})
 }
+
+func TestDownloadLog(t *testing.T) {
+	t.Run("saves the log with the instance JWT", func(t *testing.T) {
+		var gotPath, gotAuth string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath, gotAuth = r.URL.Path, r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Write([]byte("This is pdfTeX\n! Undefined control sequence.\n"))
+		}))
+		defer srv.Close()
+		outputPath := filepath.Join(t.TempDir(), "paper.log")
+
+		client := cli.NewInstanceClient(srv.URL+"/sandbox/2025", "instance-jwt")
+		err := client.DownloadLog(t.Context(), "/projects/prj_abc/builds/bld_abc/log", outputPath)
+
+		require.NoError(t, err, "GET %s", gotPath)
+		assert.Equal(t, "/sandbox/2025/projects/prj_abc/builds/bld_abc/log", gotPath)
+		assert.Equal(t, "Bearer instance-jwt", gotAuth)
+		got, err := os.ReadFile(outputPath)
+		require.NoError(t, err)
+		assert.Equal(t, "This is pdfTeX\n! Undefined control sequence.\n", string(got))
+	})
+
+	t.Run("expired log is an API error with the server message", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusGone)
+			w.Write([]byte(`{"error":"build not found or expired"}`))
+		}))
+		defer srv.Close()
+		outputPath := filepath.Join(t.TempDir(), "paper.log")
+
+		client := cli.NewInstanceClient(srv.URL, "instance-jwt")
+		err := client.DownloadLog(t.Context(), "/projects/prj_abc/builds/bld_abc/log", outputPath)
+
+		require.Error(t, err)
+		assert.Equal(t, "log download failed (410): build not found or expired", err.Error())
+		assert.NoFileExists(t, outputPath)
+	})
+
+	t.Run("log URL outside the instance is refused without a request", func(t *testing.T) {
+		var requests int
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests++
+		}))
+		defer srv.Close()
+
+		client := cli.NewInstanceClient(srv.URL, "instance-jwt")
+		err := client.DownloadLog(t.Context(), "/../../projects/prj_abc/builds/bld_abc/log", filepath.Join(t.TempDir(), "paper.log"))
+
+		require.Error(t, err)
+		assert.Equal(t, `invalid log URL "/../../projects/prj_abc/builds/bld_abc/log"`, err.Error())
+		assert.Zero(t, requests)
+	})
+}

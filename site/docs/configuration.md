@@ -80,7 +80,7 @@ When you run `tx build`, the CLI syncs your project files to the server. Only fi
 
 ### Excluded by default
 
-`.git/`, `.texops.yaml`, and `.txignore` are always excluded from uploads.
+`.git/`, `.texops/`, `.texops.yaml`, and `.txignore` are always excluded from uploads. `.texops/logs/` holds the build logs saved by `tx build --log=file`.
 
 ### `.gitignore`
 

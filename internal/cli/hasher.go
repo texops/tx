@@ -149,7 +149,7 @@ func FormatSize(bytes int64) string {
 }
 
 func loadGitignore(dir string) *ignore.GitIgnore {
-	patterns := []string{".git", ".texops.yaml", ".txignore"}
+	patterns := []string{".git", ".texops", ".texops.yaml", ".txignore"}
 
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	data, err := os.ReadFile(gitignorePath)

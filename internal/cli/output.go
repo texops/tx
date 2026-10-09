@@ -101,6 +101,11 @@ type buildDocJSON struct {
 
 func renderBuild(ui *UI, results []docResult, elapsed time.Duration) error {
 	if ui.JSON() {
+		for _, r := range results {
+			for _, line := range docSummaryLines(r) {
+				ui.Log(line)
+			}
+		}
 		return ui.WriteJSON(buildResultJSON(results, elapsed))
 	}
 	succeeded, failed := 0, 0
@@ -114,13 +119,83 @@ func renderBuild(ui *UI, results []docResult, elapsed time.Duration) error {
 	ui.Gap()
 	ui.Result(fmt.Sprintf("Build complete: %d succeeded, %d failed (%.1fs)", succeeded, failed, elapsed.Seconds()))
 	for _, r := range results {
-		if r.Success {
-			ui.Log(fmt.Sprintf("  %s => %s", r.Name, r.Output))
-		} else {
-			ui.Log(fmt.Sprintf("  %s !! FAILED", r.Name))
+		for _, line := range docSummaryLines(r) {
+			ui.Log(line)
 		}
 	}
 	return nil
+}
+
+// docSummaryLines is a document's line in the build summary followed by one
+// indented line per diagnostic.
+func docSummaryLines(r docResult) []string {
+	var head string
+	switch {
+	case r.Success:
+		head = fmt.Sprintf("  %s => %s", r.Name, filepath.ToSlash(r.Output))
+		if len(r.Diagnostics) > 0 {
+			head += ", " + diagnosticCounts(r.Diagnostics)
+		}
+	case len(r.Diagnostics) > 0:
+		head = fmt.Sprintf("  %s: FAILED, %s", r.Name, diagnosticCounts(r.Diagnostics))
+	case r.Reason != "":
+		head = fmt.Sprintf("  %s: FAILED (%s)", r.Name, r.Reason)
+	default:
+		head = fmt.Sprintf("  %s: FAILED", r.Name)
+	}
+	if r.Log != "" {
+		head += fmt.Sprintf(" (log: %s)", filepath.ToSlash(r.Log))
+	}
+	lines := []string{head}
+	for _, d := range r.Diagnostics {
+		lines = append(lines, "    "+formatDiagnostic(d))
+	}
+	if r.Truncated {
+		lines = append(lines, "    (more diagnostics were found; see the log)")
+	}
+	return lines
+}
+
+func diagnosticCounts(diags []Diagnostic) string {
+	errs := 0
+	for _, d := range diags {
+		if d.Severity == "error" {
+			errs++
+		}
+	}
+	return plural(errs, "error") + ", " + plural(len(diags)-errs, "warning")
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
+}
+
+// formatDiagnostic renders a diagnostic as "file:line: severity: message",
+// leaving out the parts the server did not send.
+func formatDiagnostic(d Diagnostic) string {
+	var b strings.Builder
+	switch {
+	case d.File != "" && d.Line > 0:
+		fmt.Fprintf(&b, "%s:%d: ", d.File, d.Line)
+	case d.File != "":
+		b.WriteString(d.File + ": ")
+	}
+	if d.Severity != "" {
+		b.WriteString(d.Severity + ": ")
+	}
+	b.WriteString(d.Message)
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			return ' '
+		case r < 0x20 || r == 0x7f:
+			return -1
+		}
+		return r
+	}, b.String())
 }
 
 func buildResultJSON(results []docResult, elapsed time.Duration) buildJSON {

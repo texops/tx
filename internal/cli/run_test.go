@@ -33,6 +33,9 @@ type fakeTexOps struct {
 	createdToken     map[string]any
 	distributions    string
 	done             map[string]map[string]any
+	logs             map[string]string
+	queued           bool
+	outputStatus     int
 
 	mu         sync.Mutex
 	exchange   []string
@@ -46,7 +49,7 @@ type requestUA struct {
 
 func newFakeTexOps(t *testing.T) *fakeTexOps {
 	t.Helper()
-	f := &fakeTexOps{done: map[string]map[string]any{}}
+	f := &fakeTexOps{done: map[string]map[string]any{}, logs: map[string]string{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	t.Setenv("TX_API_URL", f.srv.URL)
@@ -158,9 +161,27 @@ func (f *fakeTexOps) route(w http.ResponseWriter, r *http.Request, body []byte) 
 		}
 		doneData, _ := json.Marshal(done)
 		w.Header().Set("Content-Type", "text/event-stream")
+		if f.queued {
+			fmt.Fprint(w, "event: queued\ndata: {\"message\":\"build queued, waiting for previous build to finish\"}\n\n")
+		}
 		fmt.Fprintf(w, "event: log\ndata: {\"message\":\"latexmk output for %s\"}\n\nevent: done\ndata: %s\n\n", req.Main, doneData)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/projects/prj_test/builds/") && strings.HasSuffix(r.URL.Path, "/output"):
+		if f.outputStatus != 0 {
+			w.WriteHeader(f.outputStatus)
+			w.Write([]byte(`{"error":"storage unavailable"}`))
+			return
+		}
 		w.Write([]byte("%PDF-1.4 test"))
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/projects/prj_test/builds/") && strings.HasSuffix(r.URL.Path, "/log"):
+		buildID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/projects/prj_test/builds/"), "/log")
+		log, ok := f.logs[buildID]
+		if !ok {
+			w.WriteHeader(http.StatusGone)
+			w.Write([]byte(`{"error":"build not found or expired"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte(log))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -601,7 +622,7 @@ func TestRunOutputStreams(t *testing.T) {
 		r := runTx(t, f, "build", "paper")
 
 		require.Equal(t, cli.ExitBuildFailed, r.code, r)
-		assert.Contains(t, r.stdout, "      paper !! FAILED\n", r)
+		assert.Contains(t, r.stdout, "      paper: FAILED (latex_error)\n", r)
 		assert.Equal(t, 1, strings.Count(r.stderr, "one or more documents failed to build"), r)
 		assert.Equal(t, 1, strings.Count(r.stderr, "build failed with latex_error"), r)
 	})
@@ -658,7 +679,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, cli.LogStdout, ui)
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindBuildFailed, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())
@@ -670,7 +691,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, []string{"paper"}, false, false, cli.LogStdout, ui)
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())
@@ -684,7 +705,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogStdout, ui)
 
 		require.Error(t, err, buf.String())
 		assert.Equal(t, cli.KindNetwork, cli.AsExitError(err).Kind, buf.String())
@@ -697,7 +718,7 @@ func TestRunBuildErrorKind(t *testing.T) {
 		dir := projectDir(t, projectConfig)
 		ui, buf := testUI()
 
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogStdout, ui)
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindConfig, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())

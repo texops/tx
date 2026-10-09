@@ -69,6 +69,24 @@ func TestCollectFiles(t *testing.T) {
 		assert.Equal(t, int64(len(refsContent)), files[1].Size)
 	})
 
+	t.Run("skips the .texops directory", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("content"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("texlive: \"2025\"\n"), 0o600))
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".texops", "logs"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops", ".gitignore"), []byte("*\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops", "logs", "paper.log"), []byte("log"), 0o600))
+
+		files, err := cli.CollectFiles(t.Context(), dir)
+
+		require.NoError(t, err)
+		paths := make([]string, len(files))
+		for i, f := range files {
+			paths[i] = f.Path
+		}
+		assert.Equal(t, []string{"paper.tex"}, paths)
+	})
+
 	t.Run("respects .gitignore patterns", func(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.aux\nbuild/\n"), 0o600))

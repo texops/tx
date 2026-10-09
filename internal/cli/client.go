@@ -19,6 +19,8 @@ import (
 
 var validIDPattern = regexp.MustCompile(`^[a-z]{3}_[0-9A-Za-z]+$`)
 
+var validLogURLPattern = regexp.MustCompile(`^/projects/[a-z]{3}_[0-9A-Za-z]+/builds/[a-z]{3}_[0-9A-Za-z]+/log$`)
+
 // APIError represents an HTTP error response from the API.
 type APIError struct {
 	Op         string
@@ -58,11 +60,14 @@ type SyncResult struct {
 }
 
 type BuildDoneEvent struct {
-	Status  string `json:"status"`
-	PdfURL  string `json:"pdfUrl,omitempty"`
-	Message string `json:"message,omitempty"`
-	BuildID string `json:"build_id,omitempty"`
-	Reason  string `json:"reason,omitempty"`
+	Status      string       `json:"status"`
+	PdfURL      string       `json:"pdfUrl,omitempty"`
+	Message     string       `json:"message,omitempty"`
+	BuildID     string       `json:"build_id,omitempty"`
+	Reason      string       `json:"reason,omitempty"`
+	LogURL      string       `json:"log_url,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+	Truncated   bool         `json:"truncated,omitempty"`
 }
 
 // Diagnostic is one LaTeX error or warning reported for a build.
@@ -653,6 +658,67 @@ func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarDat
 }
 
 func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
+	return c.build(ctx, projectID, main, directory, distVersion, compiler, args, buildOptions, onLog, onLog)
+}
+
+// Build runs a build, calling onLog with each line of build output and
+// onQueued with each queue status message.
+func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog, onQueued func(string)) (BuildDoneEvent, error) {
+	return c.build(ctx, projectID, main, directory, distVersion, compiler, nil, buildOptions, onLog, onQueued)
+}
+
+func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, outputPath string) error {
+	if !validIDPattern.MatchString(buildID) {
+		return fmt.Errorf("invalid build ID format")
+	}
+	u := fmt.Sprintf("%s/projects/%s/builds/%s/output", c.baseURL, projectID, buildID)
+
+	req, err := newRequest(ctx, "GET", u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.jwt)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return &APIError{Op: "PDF download", StatusCode: resp.StatusCode}
+	}
+
+	return writeFilePreserveInode(resp.Body, outputPath)
+}
+
+// DownloadLog saves the TeX log at logURL, a path relative to the instance
+// from the build's done event, to outputPath.
+func (c *InstanceClient) DownloadLog(ctx context.Context, logURL, outputPath string) error {
+	if !validLogURLPattern.MatchString(logURL) {
+		return fmt.Errorf("invalid log URL %q", logURL)
+	}
+
+	req, err := newRequest(ctx, "GET", c.baseURL+logURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.jwt)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return &APIError{Op: "log download", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
+	}
+
+	return writeFilePreserveInode(resp.Body, outputPath)
+}
+
+func (c *InstanceClient) build(ctx context.Context, projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog, onQueued func(string)) (BuildDoneEvent, error) {
 	payload := map[string]any{
 		"main":                 main,
 		"distribution_version": distVersion,
@@ -690,70 +756,7 @@ func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, dir
 		return BuildDoneEvent{}, &APIError{Op: "build request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
-	return ParseSSEStream(resp.Body, onLog)
-}
-
-func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
-	payload := map[string]any{
-		"main":                 main,
-		"distribution_version": distVersion,
-	}
-	if directory != "" {
-		payload["directory"] = directory
-	}
-	if compiler != "" {
-		payload["compiler"] = compiler
-	}
-	if len(buildOptions) > 0 {
-		payload["build_options"] = buildOptions
-	}
-	body, _ := json.Marshal(payload)
-
-	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
-
-	req, err := newRequest(ctx, "POST", u, bytes.NewReader(body))
-	if err != nil {
-		return BuildDoneEvent{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.jwt)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return BuildDoneEvent{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return BuildDoneEvent{}, &APIError{Op: "build request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
-	}
-
-	return ParseSSEStream(resp.Body, onLog)
-}
-
-func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, outputPath string) error {
-	if !validIDPattern.MatchString(buildID) {
-		return fmt.Errorf("invalid build ID format")
-	}
-	u := fmt.Sprintf("%s/projects/%s/builds/%s/output", c.baseURL, projectID, buildID)
-
-	req, err := newRequest(ctx, "GET", u, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.jwt)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return &APIError{Op: "PDF download", StatusCode: resp.StatusCode}
-	}
-
-	return writeFilePreserveInode(resp.Body, outputPath)
+	return ParseSSEEvents(resp.Body, onLog, onQueued)
 }
 
 func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarData []byte, onSent func(int64)) error {
@@ -831,6 +834,10 @@ func writeFilePreserveInode(r io.Reader, outputPath string) error {
 }
 
 func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error) {
+	return ParseSSEEvents(reader, onLog, onLog)
+}
+
+func ParseSSEEvents(reader io.Reader, onLog, onQueued func(string)) (BuildDoneEvent, error) {
 	result := BuildDoneEvent{
 		Status:  "error",
 		Message: "Stream ended unexpectedly",
@@ -850,8 +857,8 @@ func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error
 						onLog(extractSSEMessage(eventData))
 					}
 				case "queued":
-					if onLog != nil {
-						onLog(extractSSEMessage(eventData))
+					if onQueued != nil {
+						onQueued(extractSSEMessage(eventData))
 					}
 				case "done":
 					if err := json.Unmarshal([]byte(eventData), &result); err != nil {
