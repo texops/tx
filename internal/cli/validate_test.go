@@ -319,7 +319,7 @@ func TestInitTexlive(t *testing.T) {
 	})
 }
 
-func TestTokenListNameColumn(t *testing.T) {
+func TestTokenListColumns(t *testing.T) {
 	t.Run("NAME column fits the longest name", func(t *testing.T) {
 		f := newFakeTexOps(t)
 		f.tokens = []map[string]any{
@@ -331,9 +331,26 @@ func TestTokenListNameColumn(t *testing.T) {
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.Equal(t,
-			"    NAME                       PREFIX       EXPIRES        LAST USED      CREATED     \n"+
-				"    github-actions-deploy-prod tx_aaaa      01 Jan 2027    never          01 Oct 2026 \n"+
-				"    dev                        tx_bbbb      never          05 Oct 2026    02 Oct 2026 \n",
+			"    NAME                        PREFIX   EXPIRES      LAST USED    CREATED\n"+
+				"    github-actions-deploy-prod  tx_aaaa  01 Jan 2027  never        01 Oct 2026\n"+
+				"    dev                         tx_bbbb  never        05 Oct 2026  02 Oct 2026\n",
+			r.stdout, r)
+	})
+
+	t.Run("PREFIX column fits real 17-character prefixes", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		f.tokens = []map[string]any{
+			{"id": "tok_1", "name": "ci", "prefix": "texops_token_ISDR", "expires_at": "2027-01-01T00:00:00Z", "created_at": "2026-10-01T00:00:00Z"},
+			{"id": "tok_2", "name": "dev", "prefix": "texops_token_abcd", "last_used_at": "2026-10-05T00:00:00Z", "created_at": "2026-10-02T00:00:00Z"},
+		}
+
+		r := runTx(t, f, "token", "list")
+
+		require.Equal(t, cli.ExitOK, r.code, r)
+		assert.Equal(t,
+			"    NAME  PREFIX             EXPIRES      LAST USED    CREATED\n"+
+				"    ci    texops_token_ISDR  01 Jan 2027  never        01 Oct 2026\n"+
+				"    dev   texops_token_abcd  never        05 Oct 2026  02 Oct 2026\n",
 			r.stdout, r)
 	})
 
@@ -348,9 +365,87 @@ func TestTokenListNameColumn(t *testing.T) {
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.Equal(t,
-			"    NAME        PREFIX       EXPIRES        LAST USED      CREATED     \n"+
-				"    Déploiement tx_aaaa      never          03 Oct 2026    01 Oct 2026 \n"+
-				"    dev         tx_bbbb      01 Jan 2027    never          02 Oct 2026 \n",
+			"    NAME         PREFIX   EXPIRES      LAST USED    CREATED\n"+
+				"    Déploiement  tx_aaaa  never        03 Oct 2026  01 Oct 2026\n"+
+				"    dev          tx_bbbb  01 Jan 2027  never        02 Oct 2026\n",
 			r.stdout, r)
+	})
+}
+
+func TestTokenCreateName(t *testing.T) {
+	createdWithoutName := map[string]any{"token": "tx_secret_value", "id": "tok_2", "prefix": "tx_secr", "created_at": "2026-10-01T00:00:00Z"}
+
+	t.Run("positional name", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		f.createdToken = createdWithoutName
+
+		r := runTx(t, f, "token", "create", "deploy", "--no-expiry", "--json")
+
+		require.Equal(t, cli.ExitOK, r.code, r)
+		assert.JSONEq(t, `{"name": "deploy", "token": "tx_secret_value", "expires_at": null}`, r.stdout, r)
+	})
+
+	t.Run("positional name equal to --name", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		f.createdToken = createdWithoutName
+
+		r := runTx(t, f, "token", "create", "deploy", "--name", "deploy", "--no-expiry", "--json")
+
+		require.Equal(t, cli.ExitOK, r.code, r)
+		assert.JSONEq(t, `{"name": "deploy", "token": "tx_secret_value", "expires_at": null}`, r.stdout, r)
+	})
+
+	t.Run("positional name different from --name exits 2", func(t *testing.T) {
+		f := newFakeTexOps(t)
+
+		r := runTx(t, f, "token", "create", "deploy", "--name", "ci", "--no-expiry")
+
+		require.Equal(t, cli.ExitUsage, r.code, r)
+		assert.Equal(t, "token name given twice: \"deploy\" and --name \"ci\"\n", r.stderr, r)
+		assert.NotContains(t, strings.Join(f.exchange, "\n"), "POST /auth/tokens", r)
+	})
+
+	t.Run("two positional names exit 2", func(t *testing.T) {
+		f := newFakeTexOps(t)
+
+		r := runTx(t, f, "token", "create", "deploy", "ci", "--no-expiry")
+
+		require.Equal(t, cli.ExitUsage, r.code, r)
+		assert.Equal(t, "too many arguments: tx token create takes at most one name\n", r.stderr, r)
+		assert.NotContains(t, strings.Join(f.exchange, "\n"), "POST /auth/tokens", r)
+	})
+}
+
+func TestBuildProjectKey(t *testing.T) {
+	configWithoutKey := "texlive: \"2025\"\ndocuments:\n  - name: paper\n    main: paper.tex\n"
+
+	t.Run("failed project creation leaves the config untouched", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		f.projectStatus = http.StatusBadRequest
+		f.projectBody = `{"error":"unsupported distribution version \"2099\" (supported: 2025, 2024)"}`
+		dir := projectDir(t, configWithoutKey)
+
+		r := runTx(t, f, "build")
+
+		require.Equal(t, cli.ExitConfig, r.code, r)
+		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
+		require.NoError(t, err)
+		assert.Equal(t, configWithoutKey, string(data), r)
+	})
+
+	t.Run("successful project creation saves the key that was sent", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		dir := projectDir(t, "---\n"+configWithoutKey)
+
+		r := runTx(t, f, "build")
+
+		require.Equal(t, cli.ExitOK, r.code, r)
+		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
+		require.NoError(t, err)
+		config, err := cli.ParseConfig(string(data))
+		require.NoError(t, err, string(data))
+		assert.Len(t, config.ProjectKey, 22, string(data))
+		assert.Contains(t, f.exchanges(), config.ProjectKey, r)
+		assert.True(t, strings.HasPrefix(string(data), "---\nproject_key: "), string(data))
 	})
 }

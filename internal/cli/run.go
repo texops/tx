@@ -50,9 +50,6 @@ func Run(version string, args []string, stdin io.Reader, stdout, stderr io.Write
 		case errors.Is(flagsErr.Type, flags.ErrHelp):
 			writeHelp(parser, stdout)
 			return ExitOK
-		case errors.Is(flagsErr.Type, flags.ErrCommandRequired) && len(args) == 0:
-			writeHelp(parser, stdout)
-			return ExitOK
 		case errors.Is(flagsErr.Type, flags.ErrCommandRequired):
 			writeHelp(parser, stderr)
 		}

@@ -44,12 +44,13 @@ func TestHelp(t *testing.T) {
 		assertGolden(t, "help-build.golden", r)
 	})
 
-	t.Run("bare tx prints the root help", func(t *testing.T) {
+	t.Run("bare tx prints the root help to stderr and exits 2", func(t *testing.T) {
 		help := runTx(t, nil, "--help")
 		r := runTx(t, nil)
 
-		require.Equal(t, cli.ExitOK, r.code, r)
-		assert.Equal(t, help.stdout, r.stdout, r)
+		require.Equal(t, cli.ExitUsage, r.code, r)
+		assert.Empty(t, r.stdout, r)
+		assert.Contains(t, r.stderr, help.stdout, r)
 	})
 
 	t.Run("missing subcommand prints the command help to stderr", func(t *testing.T) {
@@ -90,9 +91,9 @@ func TestHelp(t *testing.T) {
 		r := runTx(t, nil, "token", "create", "--help")
 
 		require.Equal(t, cli.ExitOK, r.code, r)
-		assert.Contains(t, r.stdout, "Without one, --name and\neither --expires-in or --no-expiry are required", r)
+		assert.Contains(t, r.stdout, "Without one, the name\n(as an argument or --name) and either --expires-in or --no-expiry are\nrequired", r)
 		assert.Contains(t, r.stdout, "(max 10y)", r)
-		assert.Contains(t, r.stdout, "Examples:\n  tx token create --name ci --expires-in 90d\n", r)
+		assert.Contains(t, r.stdout, "Examples:\n  tx token create ci --expires-in 90d\n", r)
 	})
 
 	t.Run("token list help has examples", func(t *testing.T) {

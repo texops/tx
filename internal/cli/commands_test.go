@@ -2449,7 +2449,7 @@ func TestTokenCreateCmd(t *testing.T) {
 		}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "specify --name in non-interactive mode")
+		assert.Contains(t, err.Error(), "specify the token name (tx token create <name>, or --name) in non-interactive mode")
 	})
 
 	t.Run("stdout TTY with non-TTY stdin does not prompt for a name", func(t *testing.T) {
@@ -2462,7 +2462,7 @@ func TestTokenCreateCmd(t *testing.T) {
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
-		assert.Contains(t, err.Error(), "specify --name in non-interactive mode")
+		assert.Contains(t, err.Error(), "specify the token name (tx token create <name>, or --name) in non-interactive mode")
 	})
 
 	t.Run("stdout TTY with non-TTY stdin does not prompt for the expiry", func(t *testing.T) {

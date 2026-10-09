@@ -30,7 +30,7 @@ tx build <name>                          # Build a specific document
 tx build --log=file                      # Save the LaTeX log to .texops/logs/ instead of streaming it
 tx build --live                          # Watch for changes and rebuild (until Ctrl+C)
 tx status                                # Show authentication status
-tx token create [--name "CI"]            # Create an API token
+tx token create [name]                   # Create an API token
 tx token list                            # List API tokens
 tx token delete [name] [--yes]           # Delete an API token
 tx <command> --json                      # Print one JSON document to stdout

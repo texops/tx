@@ -322,12 +322,13 @@ func TestRunExitCodes(t *testing.T) {
 		assert.Empty(t, r.stdout, r)
 	})
 
-	t.Run("no command prints help and exits 0", func(t *testing.T) {
+	t.Run("no command prints help to stderr and exits 2", func(t *testing.T) {
 		r := runTx(t, nil)
 
-		assert.Equal(t, cli.ExitOK, r.code, r)
-		assert.Contains(t, r.stdout, "Usage:", r)
-		assert.Empty(t, r.stderr, r)
+		assert.Equal(t, cli.ExitUsage, r.code, r)
+		assert.Contains(t, r.stderr, "Usage:", r)
+		assert.Contains(t, r.stderr, "Please specify one command of:", r)
+		assert.Empty(t, r.stdout, r)
 	})
 
 	t.Run("unknown flag exits 2", func(t *testing.T) {
@@ -366,18 +367,19 @@ func TestRunExitCodes(t *testing.T) {
 		r := runTx(t, f, "token", "create")
 
 		assert.Equal(t, cli.ExitUsage, r.code, r)
-		assert.Equal(t, "specify --name in non-interactive mode\n", r.stderr, r)
+		assert.Equal(t, "specify the token name (tx token create <name>, or --name) in non-interactive mode\n", r.stderr, r)
 		assert.Empty(t, r.requests, r)
 	})
 
-	t.Run("status with a rejected token exits 3", func(t *testing.T) {
+	t.Run("status with a rejected TX_API_TOKEN exits 3 and names the token", func(t *testing.T) {
 		f := newFakeTexOps(t)
 		f.whoamiStatus = http.StatusUnauthorized
 
 		r := runTx(t, f, "status")
 
 		assert.Equal(t, cli.ExitAuth, r.code, r)
-		assert.Contains(t, r.stderr, "Session expired. Run 'tx login' to re-authenticate.\n", r)
+		assert.Contains(t, r.stderr, "TX_API_TOKEN was rejected (invalid, expired or deleted); set a valid token, or unset it to use your 'tx login' session\n", r)
+		assert.NotContains(t, r.stderr, "tx login' to re-authenticate", r)
 	})
 
 	t.Run("status without credentials exits 3", func(t *testing.T) {
@@ -644,8 +646,8 @@ func TestRunOutputStreams(t *testing.T) {
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.Equal(t,
-			"    NAME PREFIX       EXPIRES        LAST USED      CREATED     \n"+
-				"    ci   tx_secr      01 Jan 2027    never          01 Oct 2026 \n",
+			"    NAME  PREFIX   EXPIRES      LAST USED  CREATED\n"+
+				"    ci    tx_secr  01 Jan 2027  never      01 Oct 2026\n",
 			r.stdout, r)
 		assert.Equal(t, "Loading tokens...\n1 token(s)\n", r.stderr, r)
 	})

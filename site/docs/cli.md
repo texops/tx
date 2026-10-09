@@ -69,19 +69,19 @@ With `--log=file`, a failed build also prints the last 20 lines of the log to st
 
 ## `tx status`
 
-Show authentication status including email, authentication method, and token expiry. Exits `3` when not authenticated or when the session or token has expired or was rejected.
+Show authentication status including email, authentication method, and token expiry. Exits `3` when not authenticated or when the session or token has expired or was rejected. When the rejected credential came from `TX_API_TOKEN`, the message says so (`TX_API_TOKEN was rejected (invalid, expired or deleted); set a valid token, or unset it to use your 'tx login' session`), since `tx login` alone does not help while the variable is set.
 
-## `tx token create`
+## `tx token create [name]`
 
-Create a new API token for CI pipelines or non-interactive use. The token value is printed to stdout once and cannot be retrieved again.
+Create a new API token for CI pipelines or non-interactive use. The token value is printed to stdout once and cannot be retrieved again. The name can be given as an argument (`tx token create ci`) or with `--name`; giving two different names exits `2`.
 
 | Flag | Description |
 |------|-------------|
-| `--name <name>` | Name for the token. Required in non-interactive mode. |
+| `--name <name>` | Name for the token, the same as the name argument. Required in non-interactive mode. |
 | `--expires-in <duration>` | Expiry duration: a positive integer followed by `d` (days) or `y` (years), max 10 years (`3650d` or `10y`). Mutually exclusive with `--no-expiry`. |
 | `--no-expiry` | Create a token that does not expire. Mutually exclusive with `--expires-in`. |
 
-Without a terminal, `--name` and one of `--expires-in` or `--no-expiry` are required; otherwise `tx token create` exits `2`.
+Without a terminal, a name and one of `--expires-in` or `--no-expiry` are required; otherwise `tx token create` exits `2`.
 
 ## `tx token list`
 
@@ -287,7 +287,7 @@ Results go to stdout: the build summary, the `tx status` fields, the `tx token l
 |------|---------|-------------------|
 | `0` | Success, including `--help` and `tx version`. | |
 | `1` | Service or unexpected failure: network errors, server errors (5xx), sync or upload failures, a build that hit the time limit or failed inside the service. | `internal`, `network`, `timeout` |
-| `2` | Usage error: unknown command, missing subcommand or unknown flag, bad flag value (including an unsupported `--texlive` or `--compiler`), unknown document name, `--json` with `--live`, missing required input when there is no terminal to prompt on, `tx token delete` without `--yes` when there is no terminal to confirm on. | `usage` |
+| `2` | Usage error: no command (`tx` alone prints the help to stderr), unknown command, missing subcommand or unknown flag, bad flag value (including an unsupported `--texlive` or `--compiler`), unknown document name, `--json` with `--live`, missing required input when there is no terminal to prompt on, `tx token delete` without `--yes` when there is no terminal to confirm on. | `usage` |
 | `3` | Not authenticated, or the session or API token has expired or was rejected. | `not_authenticated` |
 | `4` | Project configuration error: `.texops.yaml` is missing or invalid, or its TeX Live version is not supported. | `config` |
 | `5` | A document failed to compile (LaTeX errors, or no PDF was produced). | `build_failed` |

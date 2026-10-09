@@ -78,18 +78,19 @@ Examples:
 CI or from a coding agent without 'tx login'.
 
 Examples:
-  tx token create --name ci --expires-in 90d
+  tx token create ci --expires-in 90d
   tx token list
   tx token delete ci --yes`},
 
 	{"token create", `Create an API token and print it to stdout. The value is shown only once.
 
-On a terminal, tx asks for a missing name or expiry. Without one, --name and
-either --expires-in or --no-expiry are required (exit 2 otherwise).
+On a terminal, tx asks for a missing name or expiry. Without one, the name
+(as an argument or --name) and either --expires-in or --no-expiry are
+required (exit 2 otherwise).
 
 Examples:
-  tx token create --name ci --expires-in 90d
-  tx token create --name laptop --no-expiry --json`},
+  tx token create ci --expires-in 90d
+  tx token create laptop --no-expiry --json`},
 
 	{"token list", `List API tokens with their name, prefix, expiry, last use and creation date.
 

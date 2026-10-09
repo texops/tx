@@ -9,6 +9,7 @@ SYNOPSIS
      tx build [--live] [--no-cache] [--log=stdout | file] [name ...]
      tx status
      tx token create [--name name] [--expires-in duration] [--no-expiry]
+        [name]
      tx token list
      tx token delete [-y | --yes] [name]
      tx version
@@ -157,18 +158,21 @@ COMMANDS
      Show authentication status including email (when available),
      authentication method, and token expiry.  Exits 3 when not authenticated
      or when the session or token has expired or was rejected (see EXIT
-     STATUS).
+     STATUS).  When the rejected credential came from TX_API_TOKEN, the
+     message names the variable, since tx login alone does not help while it
+     is set.
 
    token create
      Create a new API token for use in CI pipelines or other non-interactive
      environments.  The token value is displayed once and cannot be retrieved
-     again.
+     again.  The name can be given as an argument or with --name; two
+     different names are a usage error.
 
      Flags:
 
      --name name
-             Name for the token.  Required in non-interactive mode; prompted
-             interactively otherwise.
+             Name for the token, the same as the name argument.  Required in
+             non-interactive mode; prompted interactively otherwise.
 
      --expires-in duration
              Token expiry duration.  A positive integer followed by ‘d’ (days)
@@ -296,7 +300,7 @@ CONFIGURATION
      project_key
              Unique identifier for the project.  Generated automatically by tx
              init.  If omitted, tx build generates one and writes it back to
-             .texops.yaml before building.
+             .texops.yaml once the project has been created.
 
      texlive
              (required) TeX Live distribution version (e.g. "2025").  Must be
@@ -458,12 +462,12 @@ EXIT STATUS
              sync or upload failures, or a build that hit the time limit or
              failed inside the service (‘internal’, ‘network’, ‘timeout’).
 
-     2       Usage error: unknown command, missing subcommand or unknown flag,
-             bad flag value (including an unsupported --texlive or
-             --compiler), unknown document name, --json with --live, missing
-             required input when there is no terminal to prompt on, or token
-             delete without --yes when there is no terminal to confirm on
-             (‘usage’).
+     2       Usage error: no command (tx alone prints the help to standard
+             error), unknown command, missing subcommand or unknown flag, bad
+             flag value (including an unsupported --texlive or --compiler),
+             unknown document name, --json with --live, missing required input
+             when there is no terminal to prompt on, or token delete without
+             --yes when there is no terminal to confirm on (‘usage’).
 
      3       Not authenticated, or the session or API token has expired or was
              rejected (‘not_authenticated’).

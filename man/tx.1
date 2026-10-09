@@ -27,6 +27,7 @@
 .Op Fl -name Ar name
 .Op Fl -expires-in Ar duration
 .Op Fl -no-expiry
+.Op Ar name
 .Nm
 .Cm token list
 .Nm
@@ -244,15 +245,25 @@ authentication method, and token expiry.
 Exits 3 when not authenticated or when the session or token has expired or
 was rejected
 .Pq see EXIT STATUS .
+When the rejected credential came from
+.Ev TX_API_TOKEN ,
+the message names the variable, since
+.Cm tx login
+alone does not help while it is set.
 .Ss token create
 Create a new API token for use in CI pipelines or other non-interactive
 environments.
 The token value is displayed once and cannot be retrieved again.
+The name can be given as an argument or with
+.Fl -name ;
+two different names are a usage error.
 .Pp
 Flags:
 .Bl -tag -width Ds
 .It Fl -name Ar name
-Name for the token.
+Name for the token, the same as the
+.Ar name
+argument.
 Required in non-interactive mode; prompted interactively otherwise.
 .It Fl -expires-in Ar duration
 Token expiry duration.
@@ -497,7 +508,7 @@ If omitted,
 .Cm tx build
 generates one and writes it back to
 .Pa .texops.yaml
-before building.
+once the project has been created.
 .It Cm texlive
 .Pq required
 TeX Live distribution version
@@ -737,7 +748,12 @@ failures, or a build that hit the time limit or failed inside the service
 .Ql timeout
 .Pc .
 .It 2
-Usage error: unknown command, missing subcommand or unknown flag, bad flag
+Usage error: no command
+.Po
+.Nm
+alone prints the help to standard error
+.Pc ,
+unknown command, missing subcommand or unknown flag, bad flag
 value
 .Pq including an unsupported Fl -texlive No or Fl -compiler ,
 unknown document name,

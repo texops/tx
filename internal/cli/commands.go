@@ -56,7 +56,7 @@ type TokenCmd struct {
 }
 
 type TokenCreateCmd struct {
-	Name      string `long:"name" value-name:"name" description:"Name for the token (required without a terminal)"`
+	Name      string `long:"name" value-name:"name" description:"Name for the token, the same as the name argument (required without a terminal)"`
 	ExpiresIn string `long:"expires-in" value-name:"duration" description:"Expiry as a whole number of days or years, e.g. 30d, 90d, 1y (max 10y); without a terminal, this or --no-expiry is required"`
 	NoExpiry  bool   `long:"no-expiry" description:"Create a token that never expires; cannot be combined with --expires-in"`
 	UI        *UI    `no-flag:"true"`
@@ -69,6 +69,10 @@ type TokenListCmd struct {
 type TokenDeleteCmd struct {
 	Yes bool `short:"y" long:"yes" description:"Delete without asking for confirmation (required without a terminal or with --json)"`
 	UI  *UI  `no-flag:"true"`
+}
+
+func (cmd *TokenCreateCmd) Usage() string {
+	return "[create-OPTIONS] [name]"
 }
 
 func (cmd *TokenDeleteCmd) Usage() string {
@@ -193,6 +197,9 @@ func checkStatus(ui *UI) (statusResult, error) {
 	if err != nil {
 		sp.Fail("Authentication check failed")
 		if apiErr, ok := errors.AsType[*APIError](err); ok && apiErr.StatusCode == http.StatusUnauthorized {
+			if source == authSourceEnv {
+				return statusResult{}, authError(errors.New("TX_API_TOKEN was rejected (invalid, expired or deleted); set a valid token, or unset it to use your 'tx login' session"))
+			}
 			return statusResult{}, authError(errors.New("Session expired. Run 'tx login' to re-authenticate."))
 		}
 		return statusResult{}, err
@@ -670,22 +677,11 @@ func runBuild(ctx context.Context, dir string, names []string, noCache, live boo
 
 	api := NewAPIClient(ResolveAPIURL(config), token)
 
-	if config.ProjectKey == "" {
+	newKey := config.ProjectKey == ""
+	if newKey {
 		key, err := generateProjectKey()
 		if err != nil {
 			return fmt.Errorf("generating project_key: %w", err)
-		}
-		line := fmt.Sprintf("project_key: %q\n", key)
-		var updated []byte
-		if bytes.HasPrefix(configData, []byte("---\n")) {
-			// Insert after YAML document marker to keep valid single-document YAML
-			marker := []byte("---\n")
-			updated = append(marker, append([]byte(line), configData[len(marker):]...)...)
-		} else {
-			updated = append([]byte(line), configData...)
-		}
-		if err := os.WriteFile(configPath, updated, 0o600); err != nil {
-			return fmt.Errorf("updating .texops.yaml with project_key: %w", err)
 		}
 		config.ProjectKey = key
 	}
@@ -697,6 +693,12 @@ func runBuild(ctx context.Context, dir string, names []string, noCache, live boo
 		return classifyVersionError(err)
 	}
 	sp.Stop("Project ready")
+
+	if newKey {
+		if err := writeProjectKey(configPath, configData, config.ProjectKey); err != nil {
+			return err
+		}
+	}
 	projectID := project.ID
 
 	p := buildParams{
@@ -732,6 +734,22 @@ func classifyVersionError(err error) error {
 		return configError(err)
 	}
 	return err
+}
+
+// writeProjectKey prepends project_key to the config file, after a leading
+// YAML document marker if there is one.
+func writeProjectKey(configPath string, configData []byte, key string) error {
+	line := fmt.Sprintf("project_key: %q\n", key)
+	var updated []byte
+	if marker := []byte("---\n"); bytes.HasPrefix(configData, marker) {
+		updated = append(marker, append([]byte(line), configData[len(marker):]...)...)
+	} else {
+		updated = append([]byte(line), configData...)
+	}
+	if err := os.WriteFile(configPath, updated, 0o600); err != nil {
+		return fmt.Errorf("updating .texops.yaml with project_key: %w", err)
+	}
+	return nil
 }
 
 func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
@@ -1085,11 +1103,18 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 		ui = defaultUI()
 	}
 
-	// Determine name
 	cmd.Name = strings.TrimSpace(cmd.Name)
+	switch {
+	case len(args) > 1:
+		return usageErrorf("too many arguments: tx token create takes at most one name")
+	case len(args) == 1 && cmd.Name != "" && strings.TrimSpace(args[0]) != cmd.Name:
+		return usageErrorf("token name given twice: %q and --name %q", args[0], cmd.Name)
+	case len(args) == 1:
+		cmd.Name = strings.TrimSpace(args[0])
+	}
 	if cmd.Name == "" {
 		if !ui.IsInteractive() {
-			return usageErrorf("specify --name in non-interactive mode")
+			return usageErrorf("specify the token name (tx token create <name>, or --name) in non-interactive mode")
 		}
 		name, err := ui.TextInput("Token name:")
 		if err != nil {

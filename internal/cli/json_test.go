@@ -342,7 +342,7 @@ func TestRunJSONStatus(t *testing.T) {
 
 		require.Equal(t, cli.ExitAuth, r.code, r)
 		assert.JSONEq(t, `{"authenticated": false}`, r.stdout, r)
-		assert.Equal(t, "Checking authentication...\nAuthentication check failed\nSession expired. Run 'tx login' to re-authenticate.\n", r.stderr, r)
+		assert.Equal(t, "Checking authentication...\nAuthentication check failed\nTX_API_TOKEN was rejected (invalid, expired or deleted); set a valid token, or unset it to use your 'tx login' session\n", r.stderr, r)
 	})
 }
 
@@ -393,8 +393,8 @@ func TestRunJSONToken(t *testing.T) {
 		r := runTx(t, f, "--json", "token", "create")
 
 		require.Equal(t, cli.ExitUsage, r.code, r)
-		assert.JSONEq(t, `{"error": {"code": "usage", "message": "specify --name in non-interactive mode"}}`, r.stdout, r)
-		assert.Equal(t, "specify --name in non-interactive mode\n", r.stderr, r)
+		assert.JSONEq(t, `{"error": {"code": "usage", "message": "specify the token name (tx token create <name>, or --name) in non-interactive mode"}}`, r.stdout, r)
+		assert.Equal(t, "specify the token name (tx token create <name>, or --name) in non-interactive mode\n", r.stderr, r)
 	})
 
 	t.Run("token delete", func(t *testing.T) {

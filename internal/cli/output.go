@@ -274,21 +274,48 @@ func renderTokenList(ui *UI, tokens []APITokenListItem) error {
 		ui.DimInfo("No tokens found. Create one with 'tx token create --name <name>'.")
 		return nil
 	}
-	nameWidth := len("NAME")
+	rows := [][]string{{"NAME", "PREFIX", "EXPIRES", "LAST USED", "CREATED"}}
 	for _, tok := range tokens {
-		nameWidth = max(nameWidth, utf8.RuneCountInString(tok.Name))
+		rows = append(rows, []string{
+			tok.Name,
+			tok.Prefix,
+			formatDatePtr(tok.ExpiresAt, "never"),
+			formatDatePtr(tok.LastUsedAt, "never"),
+			formatDate(tok.CreatedAt),
+		})
 	}
-	padName := func(name string) string {
-		return name + strings.Repeat(" ", nameWidth-utf8.RuneCountInString(name))
-	}
-	ui.Log(fmt.Sprintf("%s %-12s %-14s %-14s %-12s", padName("NAME"), "PREFIX", "EXPIRES", "LAST USED", "CREATED"))
-	for _, tok := range tokens {
-		expires := formatDatePtr(tok.ExpiresAt, "never")
-		lastUsed := formatDatePtr(tok.LastUsedAt, "never")
-		created := formatDate(tok.CreatedAt)
-		ui.Log(fmt.Sprintf("%s %-12s %-14s %-14s %-12s", padName(tok.Name), tok.Prefix, expires, lastUsed, created))
+	for _, line := range alignColumns(rows) {
+		ui.Log(line)
 	}
 	return nil
+}
+
+// alignColumns pads every column but the last to its widest cell.
+func alignColumns(rows [][]string) []string {
+	var widths []int
+	for _, row := range rows {
+		for i, cell := range row {
+			if i == len(widths) {
+				widths = append(widths, 0)
+			}
+			widths[i] = max(widths[i], utf8.RuneCountInString(cell))
+		}
+	}
+	lines := make([]string, 0, len(rows))
+	for _, row := range rows {
+		var b strings.Builder
+		for i, cell := range row {
+			if i > 0 {
+				b.WriteString("  ")
+			}
+			b.WriteString(cell)
+			if i < len(row)-1 {
+				b.WriteString(strings.Repeat(" ", widths[i]-utf8.RuneCountInString(cell)))
+			}
+		}
+		lines = append(lines, b.String())
+	}
+	return lines
 }
 
 type tokenCreateResult struct {
