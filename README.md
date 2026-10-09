@@ -23,15 +23,15 @@ go install github.com/texops/tx/cmd/tx@latest
 ## Usage
 
 ```
-tx login                        # Authenticate with TexOps
-tx init                         # Initialize a project in the current directory
-tx build                        # Build all documents
-tx build <name>                 # Build a specific document
-tx build --live                 # Watch for changes and rebuild automatically
-tx status                       # Show project status
-tx token create [--name "CI"]   # Create an API token
-tx token list                   # List API tokens
-tx token delete [name] [--yes]  # Delete an API token
+tx login [--no-browser] [--timeout <d>]  # Authenticate with TexOps
+tx init                                  # Initialize a project in the current directory
+tx build                                 # Build all documents
+tx build <name>                          # Build a specific document
+tx build --live                          # Watch for changes and rebuild automatically
+tx status                                # Show project status
+tx token create [--name "CI"]            # Create an API token
+tx token list                            # List API tokens
+tx token delete [name] [--yes]           # Delete an API token
 ```
 
 ### Getting started

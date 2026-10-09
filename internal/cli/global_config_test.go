@@ -178,9 +178,64 @@ func TestResolveAuth(t *testing.T) {
 
 		_, err := cli.ResolveAuth()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
-		assert.Contains(t, err.Error(), "tx login")
-		assert.Contains(t, err.Error(), "TX_API_TOKEN")
+		assert.Equal(t, "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
+	})
+
+	t.Run("expired JWTs report the newest expiry when the keyring is newer", func(t *testing.T) {
+		credPath := withTempCredentialsDir(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0o700))
+		fileJWT := makeTestJWT(time.Date(2026, 1, 10, 8, 0, 0, 0, time.UTC))
+		require.NoError(t, os.WriteFile(credPath, []byte("jwt: "+fileJWT+"\n"), 0o600))
+
+		origGet := cli.KeyringGet
+		defer func() { cli.KeyringGet = origGet }()
+		cli.KeyringGet = func(service, user string) (string, error) {
+			return makeTestJWT(time.Date(2026, 2, 20, 8, 0, 0, 0, time.UTC)), nil
+		}
+		t.Setenv("TX_API_TOKEN", "")
+
+		_, err := cli.ResolveAuth()
+		require.Error(t, err)
+		assert.Equal(t, "session expired on 2026-02-20; run 'tx login'", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
+	})
+
+	t.Run("expired JWTs report the newest expiry when the file is newer", func(t *testing.T) {
+		credPath := withTempCredentialsDir(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0o700))
+		fileJWT := makeTestJWT(time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC))
+		require.NoError(t, os.WriteFile(credPath, []byte("jwt: "+fileJWT+"\n"), 0o600))
+
+		origGet := cli.KeyringGet
+		defer func() { cli.KeyringGet = origGet }()
+		cli.KeyringGet = func(service, user string) (string, error) {
+			return makeTestJWT(time.Date(2026, 2, 20, 8, 0, 0, 0, time.UTC)), nil
+		}
+		t.Setenv("TX_API_TOKEN", "")
+
+		_, err := cli.ResolveAuth()
+		require.Error(t, err)
+		assert.Equal(t, "session expired on 2026-05-01; run 'tx login'", err.Error())
+	})
+
+	t.Run("expired file JWT falls back to a valid keyring JWT", func(t *testing.T) {
+		credPath := withTempCredentialsDir(t)
+		require.NoError(t, os.MkdirAll(filepath.Dir(credPath), 0o700))
+		fileJWT := makeTestJWT(time.Now().Add(-time.Hour))
+		require.NoError(t, os.WriteFile(credPath, []byte("jwt: "+fileJWT+"\n"), 0o600))
+
+		validJWT := makeTestJWT(time.Now().Add(time.Hour))
+		origGet := cli.KeyringGet
+		defer func() { cli.KeyringGet = origGet }()
+		cli.KeyringGet = func(service, user string) (string, error) {
+			return validJWT, nil
+		}
+		t.Setenv("TX_API_TOKEN", "")
+
+		token, err := cli.ResolveAuth()
+		require.NoError(t, err)
+		assert.Equal(t, validJWT, token)
 	})
 
 	t.Run("expired JWT falls back to TX_API_TOKEN", func(t *testing.T) {
@@ -202,9 +257,9 @@ func TestResolveAuth(t *testing.T) {
 		assert.Equal(t, "texops_token_fallback-token", token)
 	})
 
-	t.Run("expired JWT with no token returns not authenticated error", func(t *testing.T) {
+	t.Run("expired JWT with no token reports the expiry date", func(t *testing.T) {
 		_ = withTempCredentialsDir(t)
-		expiredJWT := makeTestJWT(time.Now().Add(-1 * time.Hour))
+		expiredJWT := makeTestJWT(time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC))
 
 		origGet := cli.KeyringGet
 		defer func() { cli.KeyringGet = origGet }()
@@ -218,8 +273,8 @@ func TestResolveAuth(t *testing.T) {
 
 		_, err := cli.ResolveAuth()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
-		assert.Contains(t, err.Error(), "tx login")
+		assert.Equal(t, "session expired on 2026-03-30; run 'tx login'", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
 	})
 
 	t.Run("valid JWT is returned even when near expiry", func(t *testing.T) {

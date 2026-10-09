@@ -4,7 +4,7 @@ NAME
      tx – TexOps CLI to build LaTeX documents in the cloud
 
 SYNOPSIS
-     tx login
+     tx login [--no-browser] [--timeout duration]
      tx init [--texlive version] [--compiler name] [--main file]
      tx build [--live] [--no-cache] [name ...]
      tx status
@@ -39,11 +39,22 @@ GETTING STARTED
 
 COMMANDS
    login
-     Authenticate with the TexOps service using the device code flow.  A one-
-     time code is displayed and the verification URL is opened in a browser
-     automatically when possible, with the code already filled in.  After
+     Authenticate with the TexOps service using the device code flow.  Prints
+     ‘Open <verification URL> and enter code <CODE>’ to stderr, then opens the
+     URL in a browser when possible, with the code already filled in.  After
      authorization completes in the browser, the session JWT is stored
      locally.
+
+     --no-browser
+             Print the URL and code without opening a browser.
+
+     --timeout duration
+             How long to wait for authorization, as a Go duration such as
+             ‘2m’.  Defaults to the lifetime of the login code.  When it runs
+             out, or the code expires first, tx exits 1.
+
+     Commands that need credentials exit 3 when there are none.  When the
+     stored session has expired, the message names the date it expired.
 
    init
      Create a .texops.yaml configuration file in the current directory.

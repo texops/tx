@@ -78,8 +78,8 @@ func jwtExpiry(token string) time.Time {
 
 // ResolveAuth returns a Bearer token for API authentication.
 // It checks in order: TX_API_TOKEN env var, JWT from credentials file,
-// JWT from keyring. Each source can override the ones below it.
-// If a JWT is found but expired, it falls through to the next source.
+// JWT from keyring. An expired JWT falls through to the next source; when
+// nothing is left, the error names the expiry of the newest expired JWT.
 func ResolveAuth() (string, error) {
 	token, _, err := resolveAuthWithSource()
 	return token, err
@@ -91,31 +91,39 @@ const (
 	authSourceKeyring = "keyring"
 )
 
+const notAuthenticatedMessage = "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')"
+
 func resolveAuthWithSource() (string, string, error) {
-	// 1. API token from environment variable (highest priority override)
 	if token := os.Getenv("TX_API_TOKEN"); token != "" {
 		return token, authSourceEnv, nil
 	}
 
-	// 2. JWT from credentials file (explicit file override)
-	if jwt, err := readJWTCredential(); err == nil && jwt != "" {
-		if exp := jwtExpiry(jwt); !exp.IsZero() && exp.Before(time.Now()) {
-			// JWT expired, fall through
-		} else {
-			return jwt, authSourceFile, nil
+	var newestExpired time.Time
+	candidates := []struct {
+		source string
+		read   func() (string, error)
+	}{
+		{authSourceFile, readJWTCredential},
+		{authSourceKeyring, func() (string, error) { return KeyringGet(keyringService, keyringJWTUser) }},
+	}
+	for _, c := range candidates {
+		jwt, err := c.read()
+		if err != nil || jwt == "" {
+			continue
+		}
+		exp := jwtExpiry(jwt)
+		if exp.IsZero() || !exp.Before(time.Now()) {
+			return jwt, c.source, nil
+		}
+		if exp.After(newestExpired) {
+			newestExpired = exp
 		}
 	}
 
-	// 3. JWT from keyring (default storage)
-	if jwt, err := KeyringGet(keyringService, keyringJWTUser); err == nil && jwt != "" {
-		if exp := jwtExpiry(jwt); !exp.IsZero() && exp.Before(time.Now()) {
-			// JWT expired, fall through
-		} else {
-			return jwt, authSourceKeyring, nil
-		}
+	if !newestExpired.IsZero() {
+		return "", "", authError(fmt.Errorf("session expired on %s; run 'tx login'", newestExpired.UTC().Format(time.DateOnly)))
 	}
-
-	return "", "", authError(errors.New("not authenticated: run 'tx login' or set TX_API_TOKEN"))
+	return "", "", authError(errors.New(notAuthenticatedMessage))
 }
 
 func storeJWT(jwt string) error {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -364,7 +365,7 @@ func TestRunExitCodes(t *testing.T) {
 		r := runTx(t, nil, "status")
 
 		assert.Equal(t, cli.ExitAuth, r.code, r)
-		assert.Equal(t, "Not authenticated. Run 'tx login' to log in to TexOps.\n", r.stderr, r)
+		assert.Equal(t, "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')\n", r.stderr, r)
 		assert.Empty(t, r.stdout, r)
 	})
 
@@ -700,5 +701,73 @@ func TestRunBuildErrorKind(t *testing.T) {
 
 		require.Error(t, err, "%s\n%s", buf.String(), f.exchanges())
 		assert.Equal(t, cli.KindConfig, cli.AsExitError(err).Kind, "%s\n%s", buf.String(), f.exchanges())
+	})
+}
+
+func TestRunLogin(t *testing.T) {
+	t.Run("login --no-browser prints the code on stderr and the result on stdout", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		opened := stubLogin(t)
+
+		r := runTx(t, f, "login", "--no-browser", "--timeout", "30s")
+
+		require.Equal(t, cli.ExitOK, r.code, r)
+		assert.Empty(t, *opened, r)
+		assert.Equal(t, "Logged in successfully\n", r.stdout, r)
+		assert.Equal(t,
+			"Requesting login code...\nLogin code received\n"+
+				"Open "+f.srv.URL+"/verify and enter code ABCD-EFGH\n"+
+				"Waiting for authorization...\nAuthorized\n",
+			r.stderr, r)
+	})
+
+	t.Run("invalid --timeout exits 2", func(t *testing.T) {
+		f := newFakeTexOps(t)
+
+		r := runTx(t, f, "login", "--timeout", "soon")
+
+		assert.Equal(t, cli.ExitUsage, r.code, r)
+		assert.Equal(t, "invalid argument for flag `--timeout' (expected time.Duration): time: invalid duration \"soon\"\n", r.stderr, r)
+		assert.Empty(t, r.requests, r)
+	})
+
+	t.Run("status with expired credentials exits 3 with the expiry date", func(t *testing.T) {
+		noCredentials(t)
+		cli.KeyringGet = func(service, user string) (string, error) {
+			return makeTestJWT(time.Date(2026, 4, 2, 9, 0, 0, 0, time.UTC)), nil
+		}
+
+		r := runTx(t, nil, "status")
+
+		assert.Equal(t, cli.ExitAuth, r.code, r)
+		assert.Equal(t, "session expired on 2026-04-02; run 'tx login'\n", r.stderr, r)
+		assert.Empty(t, r.stdout, r)
+	})
+
+	t.Run("build with expired credentials exits 3 with the expiry date", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		noCredentials(t)
+		cli.KeyringGet = func(service, user string) (string, error) {
+			return makeTestJWT(time.Date(2026, 4, 2, 9, 0, 0, 0, time.UTC)), nil
+		}
+		projectDir(t, projectConfig)
+
+		r := runTx(t, f, "build")
+
+		assert.Equal(t, cli.ExitAuth, r.code, r)
+		assert.Equal(t, 1, strings.Count(r.stderr, "session expired on 2026-04-02; run 'tx login'\n"), r)
+		assert.Empty(t, r.requests, r)
+	})
+
+	t.Run("build without credentials asks for the user or a token", func(t *testing.T) {
+		f := newFakeTexOps(t)
+		noCredentials(t)
+		projectDir(t, projectConfig)
+
+		r := runTx(t, f, "build")
+
+		assert.Equal(t, cli.ExitAuth, r.code, r)
+		assert.Equal(t, 1, strings.Count(r.stderr, "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')\n"), r)
+		assert.Empty(t, r.requests, r)
 	})
 }

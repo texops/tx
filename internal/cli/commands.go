@@ -76,7 +76,9 @@ type StatusCmd struct {
 }
 
 type LoginCmd struct {
-	UI *UI `no-flag:"true"`
+	NoBrowser bool          `long:"no-browser" description:"Print the login URL and code without opening a browser"`
+	Timeout   time.Duration `long:"timeout" description:"How long to wait for authorization, as a Go duration (e.g. 2m); defaults to the login code's lifetime"`
+	UI        *UI           `no-flag:"true"`
 }
 
 type InitCmd struct {
@@ -171,7 +173,7 @@ func (cmd *StatusCmd) Execute(args []string) error {
 func checkStatus(ui *UI) (statusResult, error) {
 	token, source, err := resolveAuthWithSource()
 	if err != nil {
-		return statusResult{}, authError(errors.New("Not authenticated. Run 'tx login' to log in to TexOps."))
+		return statusResult{}, err
 	}
 
 	apiURL := ResolveAPIURL(Config{})
@@ -202,11 +204,13 @@ func (cmd *LoginCmd) Execute(args []string) error {
 	if ui == nil {
 		ui = defaultUI()
 	}
+	if cmd.Timeout < 0 {
+		return usageErrorf("invalid --timeout %q: must not be negative", cmd.Timeout)
+	}
 
 	apiURL := ResolveAPIURL(Config{})
 	api := NewUnauthenticatedAPIClient(apiURL)
 
-	// Step 1: Request device code
 	sp := ui.Spin("Requesting login code...")
 	dcResp, err := api.RequestDeviceCode()
 	if err != nil {
@@ -215,44 +219,46 @@ func (cmd *LoginCmd) Execute(args []string) error {
 	}
 	sp.Stop("Login code received")
 
-	// Step 2: Show the user code and open the verification page, which the
-	// server has already stamped with that code.
-	ui.Status(fmt.Sprintf("Your login code: %s", dcResp.UserCode))
-
-	if err := OpenBrowser(dcResp.VerificationURL); err != nil {
-		ui.DimInfo(fmt.Sprintf("Could not open browser automatically. Open %s", dcResp.VerificationURL))
+	ui.Status(fmt.Sprintf("Open %s and enter code %s", dcResp.VerificationURL, dcResp.UserCode))
+	if !cmd.NoBrowser {
+		if err := OpenBrowser(dcResp.VerificationURL); err != nil {
+			ui.DimInfo("Could not open a browser automatically")
+		}
 	}
 
-	// Step 3: Poll for authorization
-	sp = ui.Spin("Waiting for authorization...")
-	deadline := time.Now().Add(time.Duration(dcResp.ExpiresIn) * time.Second)
+	lifetime := time.Duration(dcResp.ExpiresIn) * time.Second
+	expiredErr := &ExitError{Code: ExitFailure, Kind: KindTimeout, Err: errors.New("login code expired; run 'tx login' again")}
+	wait, waitLabel, waitErr := lifetime, "Login code expired", error(expiredErr)
+	if cmd.Timeout > 0 && (lifetime <= 0 || cmd.Timeout < lifetime) {
+		wait, waitLabel = cmd.Timeout, "Timed out waiting for authorization"
+		waitErr = &ExitError{Code: ExitFailure, Kind: KindTimeout, Err: fmt.Errorf("timed out after %s waiting for authorization; run 'tx login' again", shortDuration(cmd.Timeout))}
+	}
+	deadline := time.Now().Add(wait)
 
+	sp = ui.Spin("Waiting for authorization...")
 	var tokenResp TokenResponse
 	for {
-		if time.Now().After(deadline) {
-			sp.Fail("Login code expired")
-			return fmt.Errorf("login code expired; please run 'tx login' again")
-		}
-
-		time.Sleep(PollInterval)
+		time.Sleep(max(min(PollInterval, time.Until(deadline)), 0))
 
 		tokenResp, err = api.PollToken(dcResp.DeviceCode)
 		if err == nil {
 			break
 		}
-		if errors.Is(err, ErrAuthorizationPending) {
-			continue
-		}
 		if errors.Is(err, ErrDeviceCodeExpired) {
 			sp.Fail("Login code expired")
-			return fmt.Errorf("login code expired; please run 'tx login' again")
+			return expiredErr
 		}
-		sp.Fail("Token polling failed")
-		return err
+		if !errors.Is(err, ErrAuthorizationPending) {
+			sp.Fail("Token polling failed")
+			return err
+		}
+		if !time.Now().Before(deadline) {
+			sp.Fail(waitLabel)
+			return waitErr
+		}
 	}
 	sp.Stop("Authorized")
 
-	// Step 4: Store JWT
 	if err := storeJWT(tokenResp.JWT); err != nil {
 		return err
 	}
@@ -1222,4 +1228,15 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 	sp.Stop("Token deleted")
 
 	return renderTokenDelete(ui, tokenDeleteResult{Deleted: tokenName})
+}
+
+func shortDuration(d time.Duration) string {
+	s := d.String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return s
 }

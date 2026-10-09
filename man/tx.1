@@ -7,6 +7,8 @@
 .Sh SYNOPSIS
 .Nm
 .Cm login
+.Op Fl -no-browser
+.Op Fl -timeout Ar duration
 .Nm
 .Cm init
 .Op Fl -texlive Ar version
@@ -69,10 +71,26 @@ environment variable instead of running
 .Sh COMMANDS
 .Ss login
 Authenticate with the TexOps service using the device code flow.
-A one-time code is displayed and the verification URL is opened in a browser
-automatically when possible, with the code already filled in.
+Prints
+.Ql Open <verification URL> and enter code <CODE>
+to stderr, then opens the URL in a browser when possible, with the code
+already filled in.
 After authorization completes in the browser, the session JWT is
 stored locally.
+.Bl -tag -width Ds
+.It Fl -no-browser
+Print the URL and code without opening a browser.
+.It Fl -timeout Ar duration
+How long to wait for authorization, as a Go duration such as
+.Ql 2m .
+Defaults to the lifetime of the login code.
+When it runs out, or the code expires first,
+.Nm
+exits 1.
+.El
+.Pp
+Commands that need credentials exit 3 when there are none.
+When the stored session has expired, the message names the date it expired.
 .Ss init
 Create a
 .Pa .texops.yaml

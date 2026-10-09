@@ -6,7 +6,14 @@ Complete reference for all `tx` commands, flags, environment variables, and file
 
 ## `tx login`
 
-Authenticate with the TexOps service using the device code flow. A one-time code is displayed and the verification URL is opened in a browser automatically when possible, with the code already filled in. After authorization completes, the session JWT is stored in the system keyring (or the credentials file as a fallback).
+Authenticate with the TexOps service using the device code flow. `tx login` prints `Open <verification URL> and enter code <CODE>` to stderr, then opens the URL in a browser when possible, with the code already filled in. After authorization completes, the session JWT is stored in the system keyring (or the credentials file as a fallback).
+
+| Flag | Description |
+|------|-------------|
+| `--no-browser` | Print the URL and code without opening a browser. |
+| `--timeout <duration>` | How long to wait for authorization, as a Go duration such as `2m` or `90s`. Defaults to the lifetime of the login code. When it runs out (or the code expires first), `tx login` exits `1`. |
+
+Commands that need credentials exit `3` when there are none. When the stored session has expired, the message names the date, for example `session expired on 2026-03-30; run 'tx login'`.
 
 ## `tx init`
 

@@ -331,7 +331,7 @@ func TestRunJSONStatus(t *testing.T) {
 
 		require.Equal(t, cli.ExitAuth, r.code, r)
 		assert.JSONEq(t, `{"authenticated": false}`, r.stdout, r)
-		assert.Equal(t, "Not authenticated. Run 'tx login' to log in to TexOps.\n", r.stderr, r)
+		assert.Equal(t, "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')\n", r.stderr, r)
 	})
 
 	t.Run("rejected token exits 3", func(t *testing.T) {
@@ -470,7 +470,7 @@ func TestRunJSONLogin(t *testing.T) {
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.JSONEq(t, `{"authenticated": true}`, r.stdout, r)
 		assert.Equal(t, "header.payload.sig", stored, r)
-		assert.Contains(t, r.stderr, "Your login code: ABCD-EFGH\n", r)
+		assert.Contains(t, r.stderr, "Open "+f.srv.URL+"/verify and enter code ABCD-EFGH\n", r)
 	})
 
 	t.Run("failed login prints an error document", func(t *testing.T) {

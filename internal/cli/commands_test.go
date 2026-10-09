@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,58 @@ func mockKeyringForAuth(t *testing.T, token string) {
 		return "", fmt.Errorf("not found")
 	}
 	t.Cleanup(func() { cli.KeyringGet = origGet })
+}
+
+// stubLogin replaces the browser, keyring and poll interval for login tests
+// and returns the URLs the browser was asked to open.
+func stubLogin(t *testing.T) *[]string {
+	t.Helper()
+	var opened []string
+	origBrowser := cli.OpenBrowser
+	cli.OpenBrowser = func(url string) error {
+		opened = append(opened, url)
+		return nil
+	}
+	t.Cleanup(func() { cli.OpenBrowser = origBrowser })
+	origSet := cli.KeyringSet
+	cli.KeyringSet = func(service, user, key string) error { return nil }
+	t.Cleanup(func() { cli.KeyringSet = origSet })
+	origInterval := cli.PollInterval
+	cli.PollInterval = time.Millisecond
+	t.Cleanup(func() { cli.PollInterval = origInterval })
+	return &opened
+}
+
+// loginServer serves the device code flow with a code valid for expiresIn
+// seconds; token polls succeed when authorized and stay pending otherwise.
+func loginServer(t *testing.T, expiresIn int, authorized bool) *httptest.Server {
+	t.Helper()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/auth/device-code":
+			json.NewEncoder(w).Encode(map[string]any{
+				"device_code":      "dc_wxyz",
+				"user_code":        "WXYZ-1234",
+				"verification_url": srv.URL + "/verify?code=WXYZ-1234",
+				"expires_in":       expiresIn,
+				"interval":         1,
+			})
+		case "/auth/token":
+			if !authorized {
+				w.WriteHeader(http.StatusPreconditionRequired)
+				json.NewEncoder(w).Encode(map[string]string{"error": "authorization_pending"})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"jwt": "header.payload.sig", "expires_at": "2027-01-01T00:00:00Z"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("TX_API_URL", srv.URL)
+	return srv
 }
 
 func TestLoginCmd(t *testing.T) {
@@ -148,11 +201,147 @@ func TestLoginCmd(t *testing.T) {
 
 		t.Setenv("TX_API_URL", srv.URL)
 
-		ui, _ := testUI()
+		ui, buf := testUI()
 		cmd := &cli.LoginCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expired")
+		require.Error(t, err, buf.String())
+		assert.Equal(t, "login code expired; run 'tx login' again", err.Error(), buf.String())
+		assert.Equal(t, cli.ExitFailure, cli.AsExitError(err).Code, buf.String())
+		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, buf.String())
+		assert.Contains(t, buf.String(), "Login code expired\n")
+	})
+
+	t.Run("prints the URL and code before opening the browser", func(t *testing.T) {
+		stubLogin(t)
+		srv := loginServer(t, 900, true)
+		ui, buf := testUI()
+		var outputAtOpen string
+		cli.OpenBrowser = func(url string) error {
+			outputAtOpen = buf.String()
+			return nil
+		}
+
+		err := (&cli.LoginCmd{UI: ui}).Execute(nil)
+
+		require.NoError(t, err, buf.String())
+		assert.Equal(t, "Requesting login code...\nLogin code received\nOpen "+srv.URL+"/verify?code=WXYZ-1234 and enter code WXYZ-1234\n", outputAtOpen, buf.String())
+	})
+
+	t.Run("--no-browser prints the URL and code without opening the browser", func(t *testing.T) {
+		opened := stubLogin(t)
+		srv := loginServer(t, 900, true)
+		ui, buf := testUI()
+
+		err := (&cli.LoginCmd{UI: ui, NoBrowser: true}).Execute(nil)
+
+		require.NoError(t, err, buf.String())
+		assert.Empty(t, *opened, buf.String())
+		assert.Equal(t,
+			"Requesting login code...\nLogin code received\n"+
+				"Open "+srv.URL+"/verify?code=WXYZ-1234 and enter code WXYZ-1234\n"+
+				"Waiting for authorization...\nAuthorized\nLogged in successfully\n",
+			buf.String())
+	})
+
+	t.Run("browser failure keeps the printed URL and code", func(t *testing.T) {
+		stubLogin(t)
+		srv := loginServer(t, 900, true)
+		cli.OpenBrowser = func(string) error { return errors.New("no display") }
+		ui, buf := testUI()
+
+		err := (&cli.LoginCmd{UI: ui}).Execute(nil)
+
+		require.NoError(t, err, buf.String())
+		assert.Contains(t, buf.String(), "Open "+srv.URL+"/verify?code=WXYZ-1234 and enter code WXYZ-1234\nCould not open a browser automatically\n")
+	})
+
+	t.Run("--timeout stops waiting before the code expires", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 900, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: 50 * time.Millisecond}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Less(t, time.Since(start), 5*time.Second, buf.String())
+		assert.Equal(t, "timed out after 50ms waiting for authorization; run 'tx login' again", err.Error(), buf.String())
+		assert.Equal(t, cli.ExitFailure, cli.AsExitError(err).Code, buf.String())
+		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, buf.String())
+		assert.True(t, strings.HasSuffix(buf.String(), "Waiting for authorization...\nTimed out waiting for authorization\n"), buf.String())
+	})
+
+	t.Run("waits for the code lifetime by default", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 1, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.GreaterOrEqual(t, time.Since(start), time.Second, buf.String())
+		assert.Equal(t, "login code expired; run 'tx login' again", err.Error(), buf.String())
+		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, buf.String())
+		assert.True(t, strings.HasSuffix(buf.String(), "Waiting for authorization...\nLogin code expired\n"), buf.String())
+	})
+
+	t.Run("--timeout longer than the code lifetime ends when the code expires", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 1, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: time.Hour}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Less(t, time.Since(start), 5*time.Second, buf.String())
+		assert.Equal(t, "login code expired; run 'tx login' again", err.Error(), buf.String())
+	})
+
+	t.Run("--timeout is honoured when the server sends no code lifetime", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 0, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: 200 * time.Millisecond}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.GreaterOrEqual(t, time.Since(start), 200*time.Millisecond, buf.String())
+		assert.Equal(t, "timed out after 200ms waiting for authorization; run 'tx login' again", err.Error(), buf.String())
+	})
+
+	t.Run("--timeout shorter than the poll interval cuts the sleep short", func(t *testing.T) {
+		stubLogin(t)
+		cli.PollInterval = 5 * time.Second
+		loginServer(t, 900, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: 50 * time.Millisecond}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Less(t, time.Since(start), 2*time.Second, buf.String())
+		assert.Equal(t, "timed out after 50ms waiting for authorization; run 'tx login' again", err.Error(), buf.String())
+	})
+
+	t.Run("negative --timeout is a usage error", func(t *testing.T) {
+		stubLogin(t)
+		var requests atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests.Add(1)
+		}))
+		defer srv.Close()
+		t.Setenv("TX_API_URL", srv.URL)
+		ui, buf := testUI()
+
+		err := (&cli.LoginCmd{UI: ui, Timeout: -time.Second}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Equal(t, `invalid --timeout "-1s": must not be negative`, err.Error(), buf.String())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code, buf.String())
+		assert.Zero(t, requests.Load(), buf.String())
 	})
 
 	t.Run("device code request fails", func(t *testing.T) {
@@ -1968,7 +2157,7 @@ func TestStatusCmd(t *testing.T) {
 		err := cmd.Execute(nil)
 		require.Error(t, err, buf.String())
 
-		assert.Equal(t, "Not authenticated. Run 'tx login' to log in to TexOps.", err.Error())
+		assert.Equal(t, "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')", err.Error())
 		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
 	})
 
