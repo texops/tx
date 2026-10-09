@@ -255,7 +255,7 @@ JSON OUTPUT
              TeX showed).
 
      truncated
-             True when the service found more than 50 diagnostics.
+             True when the service found more diagnostics than it sent.
 
      The other commands print:
 

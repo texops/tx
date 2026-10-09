@@ -63,7 +63,7 @@ Build complete: 0 succeeded, 1 failed (4.2s)
     sec/intro.tex:1: warning: Citation `missing' undefined
 ```
 
-Each diagnostic is `file:line: severity: message`, leaving out what the service could not determine. File paths are relative to the project root. The `(log: ...)` part appears only when the log was saved. Successful documents list their warnings too. When the service found more than 50 diagnostics, a last line says that more are in the log.
+Each diagnostic is `file:line: severity: message`, leaving out what the service could not determine. File paths are relative to the project root. The `(log: ...)` part appears only when the log was saved. Successful documents list their warnings too. When the service found more diagnostics than it sent, a last line says that more are in the log.
 
 With `--log=file`, a failed build also prints the last 20 lines of the log to stderr. The first time a log is saved, `tx` creates `.texops/.gitignore` containing `*`, so the directory never shows up in Git. `.texops/` is never uploaded.
 
@@ -160,7 +160,7 @@ A build that ran prints a build document, also when documents failed:
 | `documents[].duration_ms` | Time spent on this document. |
 | `documents[].errors` | Error diagnostics (may be empty). |
 | `documents[].warnings` | Warning diagnostics (may be empty). |
-| `documents[].truncated` | `true` when the service found more than 50 diagnostics. |
+| `documents[].truncated` | `true` when the service found more diagnostics than it sent. |
 
 Each diagnostic has these fields; the optional ones are left out when unknown:
 
