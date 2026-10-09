@@ -29,8 +29,14 @@ type fakeTexOps struct {
 	deviceCodeStatus int
 	done             map[string]map[string]any
 
-	mu       sync.Mutex
-	exchange []string
+	mu         sync.Mutex
+	exchange   []string
+	userAgents []requestUA
+}
+
+type requestUA struct {
+	request   string
+	userAgent string
 }
 
 func newFakeTexOps(t *testing.T) *fakeTexOps {
@@ -68,6 +74,7 @@ func (f *fakeTexOps) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.exchange = append(f.exchange, fmt.Sprintf("%s %s %s\n  -> %d %s", r.Method, r.URL.Path, reqBody.String(), rw.status, rw.body.String()))
+	f.userAgents = append(f.userAgents, requestUA{request: r.Method + " " + r.URL.Path, userAgent: r.UserAgent()})
 }
 
 func (f *fakeTexOps) route(w http.ResponseWriter, r *http.Request, body []byte) {
@@ -140,6 +147,12 @@ func (f *fakeTexOps) exchanges() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return strings.Join(f.exchange, "\n")
+}
+
+func (f *fakeTexOps) recordedUserAgents() []requestUA {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]requestUA(nil), f.userAgents...)
 }
 
 type txRun struct {

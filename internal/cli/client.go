@@ -94,6 +94,15 @@ func readErrorBody(resp *http.Response) string {
 	return s
 }
 
+func newRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", currentUserAgent())
+	return req, nil
+}
+
 func NewAPIClient(baseURL, apiKey string) *APIClient {
 	return &APIClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -125,7 +134,7 @@ func (c *APIClient) CreateProject(ctx context.Context, name, distVersion, projec
 		return CreateProjectResponse{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/projects", bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", c.baseURL+"/api/projects", bytes.NewReader(body))
 	if err != nil {
 		return CreateProjectResponse{}, err
 	}
@@ -159,7 +168,7 @@ func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersi
 		return SessionResponse{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return SessionResponse{}, err
 	}
@@ -184,7 +193,7 @@ func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersi
 }
 
 func (c *APIClient) RequestDeviceCode() (DeviceCodeResponse, error) {
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/device-code", nil)
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/device-code", nil)
 	if err != nil {
 		return DeviceCodeResponse{}, err
 	}
@@ -212,7 +221,7 @@ func (c *APIClient) PollToken(deviceCode string) (TokenResponse, error) {
 		return TokenResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/token", bytes.NewReader(body))
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/token", bytes.NewReader(body))
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -241,7 +250,7 @@ func (c *APIClient) PollToken(deviceCode string) (TokenResponse, error) {
 }
 
 func (c *APIClient) RefreshToken(jwt string) (TokenResponse, error) {
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/refresh", nil)
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/refresh", nil)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -272,7 +281,7 @@ type WhoamiResponse struct {
 }
 
 func (c *APIClient) Whoami() (WhoamiResponse, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/auth/whoami", nil)
+	req, err := newRequest(context.Background(), "GET", c.baseURL+"/auth/whoami", nil)
 	if err != nil {
 		return WhoamiResponse{}, err
 	}
@@ -332,7 +341,7 @@ func (c *APIClient) CreateAPIToken(name string, expiresIn *int64) (APITokenRespo
 		return APITokenResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/tokens", bytes.NewReader(body))
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/tokens", bytes.NewReader(body))
 	if err != nil {
 		return APITokenResponse{}, err
 	}
@@ -360,7 +369,7 @@ func (c *APIClient) CreateAPIToken(name string, expiresIn *int64) (APITokenRespo
 }
 
 func (c *APIClient) ListAPITokens() ([]APITokenListItem, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/auth/tokens", nil)
+	req, err := newRequest(context.Background(), "GET", c.baseURL+"/auth/tokens", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +396,7 @@ func (c *APIClient) DeleteAPIToken(tokenID string) error {
 	if !validIDPattern.MatchString(tokenID) {
 		return fmt.Errorf("invalid token ID format")
 	}
-	req, err := http.NewRequest("DELETE", c.baseURL+"/auth/tokens/"+tokenID, nil)
+	req, err := newRequest(context.Background(), "DELETE", c.baseURL+"/auth/tokens/"+tokenID, nil)
 	if err != nil {
 		return err
 	}
@@ -433,7 +442,7 @@ var ErrStartUnsupported = errors.New("server does not support sandbox start")
 // Start brings the project's sandbox up, calling onLog with each progress message.
 func (c *InstanceClient) Start(ctx context.Context, projectID string, onLog func(string)) error {
 	u := fmt.Sprintf("%s/projects/%s/start", c.baseURL, projectID)
-	req, err := http.NewRequestWithContext(ctx, "POST", u, nil)
+	req, err := newRequest(ctx, "POST", u, nil)
 	if err != nil {
 		return err
 	}
@@ -474,7 +483,7 @@ func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []Fil
 
 	u := fmt.Sprintf("%s/projects/%s/sync", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(data))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(data))
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -584,7 +593,7 @@ func planUploadChunks(dir string, filePaths []string, limit int64) ([]uploadChun
 func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarData []byte) error {
 	u := fmt.Sprintf("%s/projects/%s/upload", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(tarData))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(tarData))
 	if err != nil {
 		return err
 	}
@@ -624,7 +633,7 @@ func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, dir
 
 	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return BuildDoneEvent{}, err
 	}
@@ -662,7 +671,7 @@ func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, 
 
 	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return BuildDoneEvent{}, err
 	}
@@ -688,7 +697,7 @@ func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, ou
 	}
 	u := fmt.Sprintf("%s/projects/%s/builds/%s/output", c.baseURL, projectID, buildID)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	req, err := newRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return err
 	}
@@ -723,7 +732,7 @@ func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarDat
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	req, err := newRequest(ctx, "POST", u, body)
 	if err != nil {
 		return err
 	}

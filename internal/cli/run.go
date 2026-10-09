@@ -11,6 +11,8 @@ import (
 // Run executes tx with args (without the program name) and returns the
 // process exit code. Every error is printed exactly once, to stderr.
 func Run(version string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	SetVersion(version)
+
 	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
 		fmt.Fprintln(stdout, "tx "+version)
 		return ExitOK
