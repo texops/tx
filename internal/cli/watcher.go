@@ -270,7 +270,7 @@ func watchAndBuildWith(ctx context.Context, dir string, ui *UI, build func(conte
 	}
 	defer fw.Close()
 
-	ui.Log("")
+	ui.Gap()
 	ui.Status("Watching for changes... (Ctrl+C to stop)")
 
 	go fw.Run(ctx)

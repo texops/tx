@@ -99,8 +99,9 @@ COMMANDS
 
    status
      Show authentication status including email (when available),
-     authentication method, and token expiry.  Always exits 0, even when not
-     authenticated or the session has expired (see EXIT STATUS).
+     authentication method, and token expiry.  Exits 3 when not authenticated
+     or when the session or token has expired or was rejected (see EXIT
+     STATUS).
 
    token create
      Create a new API token for use in CI pipelines or other non-interactive
@@ -281,11 +282,34 @@ FILES
              Default credentials file location.
 
 EXIT STATUS
+     Results (the build summary, status fields, the token list table and the
+     token printed by token create) are written to standard output.  Progress,
+     the streamed build log and error messages are written to standard error;
+     each error is printed once.
+
      0       Success, including help and version output.
 
-     1       Command failure, including parse errors, configuration errors,
-             build failures, and runtime errors.  Note: status exits 0 even
-             when not authenticated or the session has expired.
+     1       Service or unexpected failure: network errors, server errors,
+             sync or upload failures, or a build that hit the time limit or
+             failed inside the service.
+
+     2       Usage error: unknown command, missing subcommand or unknown flag,
+             bad flag value, unknown document name, or missing required input
+             when there is no terminal to prompt on.
+
+     3       Not authenticated, or the session or API token has expired or was
+             rejected.
+
+     4       Project configuration error: .texops.yaml is missing or invalid,
+             or its TeX Live version is not supported.
+
+     5       A document failed to compile (LaTeX errors, or no PDF was
+             produced).
+
+     When several documents fail for different reasons, build exits with the
+     most severe code: 1 if any failure was a service failure, otherwise 3 for
+     an authentication failure, then 4 for a configuration failure.  It exits
+     5 only when every failure is a compile failure.
 
 EXAMPLES
      Build a specific document:

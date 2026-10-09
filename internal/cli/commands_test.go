@@ -1941,11 +1941,10 @@ func TestStatusCmd(t *testing.T) {
 		ui, buf := testUI()
 		cmd := &cli.StatusCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.NoError(t, err)
+		require.Error(t, err, buf.String())
 
-		output := buf.String()
-		assert.Contains(t, output, "Not authenticated.")
-		assert.Contains(t, output, "tx login")
+		assert.Equal(t, "Not authenticated. Run 'tx login' to log in to TexOps.", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
 	})
 
 	t.Run("API returns 401 suggests re-login", func(t *testing.T) {
@@ -1962,11 +1961,10 @@ func TestStatusCmd(t *testing.T) {
 		ui, buf := testUI()
 		cmd := &cli.StatusCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.NoError(t, err)
+		require.Error(t, err, buf.String())
 
-		output := buf.String()
-		assert.Contains(t, output, "Session expired")
-		assert.Contains(t, output, "tx login")
+		assert.Equal(t, "Session expired. Run 'tx login' to re-authenticate.", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
 	})
 
 	t.Run("API returns 500 propagates error", func(t *testing.T) {
@@ -1983,10 +1981,11 @@ func TestStatusCmd(t *testing.T) {
 		ui, buf := testUI()
 		cmd := &cli.StatusCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.Error(t, err)
+		require.Error(t, err, buf.String())
 
-		output := buf.String()
-		assert.Contains(t, output, "Error:")
+		assert.Contains(t, err.Error(), "internal server error")
+		assert.Equal(t, cli.ExitFailure, cli.AsExitError(err).Code)
+		assert.NotContains(t, buf.String(), "internal server error", "the error is printed once by the caller, not by the command")
 	})
 }
 
@@ -2177,7 +2176,10 @@ func TestTokenCreateCmd(t *testing.T) {
 		}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
-		assert.Contains(t, buf.String(), "already exists")
+		require.ErrorIs(t, err, cli.ErrTokenConflict)
+		assert.Equal(t, `token name already exists: "duplicate"`, err.Error())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.NotContains(t, buf.String(), "already exists")
 	})
 
 	t.Run("create with interactive expiry selection", func(t *testing.T) {

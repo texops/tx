@@ -28,14 +28,18 @@ type uiStyles struct {
 	progressTo   string
 }
 
+// UI writes results to out (stdout) and progress, logs and errors to errOut
+// (stderr), so that stdout carries only what a script would capture.
 type UI struct {
 	isTTY      bool
+	errIsTTY   bool
 	stdinIsTTY bool
 	out        io.Writer
 	ttyOut     io.Writer // original *os.File for Bubble Tea (needs Fd() for TTY detection)
 	errOut     io.Writer
 	in         io.Reader
 	styles     uiStyles
+	errStyles  uiStyles
 }
 
 func newStyles(hasDarkBG bool, r *lipgloss.Renderer) uiStyles {
@@ -61,52 +65,74 @@ func newStyles(hasDarkBG bool, r *lipgloss.Renderer) uiStyles {
 }
 
 func NewUI(out io.Writer) *UI {
-	isTTY := false
-	if f, ok := out.(*os.File); ok {
-		isTTY = isatty.IsTerminal(f.Fd())
-	}
-	stdinIsTTY := isatty.IsTerminal(os.Stdin.Fd())
+	return NewUIWithStreams(out, os.Stderr, os.Stdin)
+}
 
+// NewUIWithStreams creates a UI over the given streams, detecting terminals
+// for those that are *os.File.
+func NewUIWithStreams(out, errOut io.Writer, in io.Reader) *UI {
+	isTTY := isTerminal(out)
+	errIsTTY := isTerminal(errOut)
+	outR := lipgloss.NewRenderer(out)
+	errR := lipgloss.NewRenderer(errOut)
 	hasDarkBG := true // safe default for non-TTY
-	if isTTY {
-		hasDarkBG = lipgloss.HasDarkBackground()
+	switch {
+	case isTTY:
+		hasDarkBG = outR.HasDarkBackground()
+	case errIsTTY:
+		hasDarkBG = errR.HasDarkBackground()
 	}
-
 	return &UI{
 		isTTY:      isTTY,
-		stdinIsTTY: stdinIsTTY,
+		errIsTTY:   errIsTTY,
+		stdinIsTTY: isTerminal(in),
 		out:        out,
-		ttyOut:     out, // preserve original writer for Bubble Tea TTY detection
-		errOut:     os.Stderr,
-		in:         os.Stdin,
-		styles:     newStyles(hasDarkBG, nil),
+		ttyOut:     out,
+		errOut:     errOut,
+		in:         in,
+		styles:     newStyles(hasDarkBG, outR),
+		errStyles:  newStyles(hasDarkBG, errR),
 	}
+}
+
+func isTerminal(v any) bool {
+	f, ok := v.(*os.File)
+	return ok && f != nil && isatty.IsTerminal(f.Fd())
 }
 
 // NewUIWithOptions creates a UI with explicit TTY mode and input reader.
 // Used in tests to simulate TTY/non-TTY behavior.
 // Error output goes to out for easy test capture.
 func NewUIWithOptions(out io.Writer, isTTY bool, in io.Reader) *UI {
-	return newUIWithOptions(out, isTTY, isTTY, in)
+	return newUIWithOptions(out, out, isTTY, isTTY, in)
 }
 
 // NewUIWithTTYOptions creates a UI with separate output-TTY and stdin-TTY flags.
 // Use this when testing code that distinguishes IsTTY() from IsInteractive().
 func NewUIWithTTYOptions(out io.Writer, outIsTTY, stdinIsTTY bool, in io.Reader) *UI {
-	return newUIWithOptions(out, outIsTTY, stdinIsTTY, in)
+	return newUIWithOptions(out, out, outIsTTY, stdinIsTTY, in)
 }
 
-func newUIWithOptions(out io.Writer, isTTY, stdinIsTTY bool, in io.Reader) *UI {
+// NewUIWithSplitOptions is NewUIWithOptions with separate stdout and stderr writers.
+func NewUIWithSplitOptions(out, errOut io.Writer, isTTY bool, in io.Reader) *UI {
+	return newUIWithOptions(out, errOut, isTTY, isTTY, in)
+}
+
+func newUIWithOptions(out, errOut io.Writer, isTTY, stdinIsTTY bool, in io.Reader) *UI {
 	r := lipgloss.NewRenderer(out)
 	r.SetColorProfile(termenv.TrueColor)
+	errR := lipgloss.NewRenderer(errOut)
+	errR.SetColorProfile(termenv.TrueColor)
 	return &UI{
 		isTTY:      isTTY,
+		errIsTTY:   isTTY,
 		stdinIsTTY: stdinIsTTY,
 		out:        out,
 		ttyOut:     out,
-		errOut:     out,
+		errOut:     errOut,
 		in:         in,
 		styles:     newStyles(true, r),
+		errStyles:  newStyles(true, errR),
 	}
 }
 
@@ -122,45 +148,53 @@ func (ui *UI) Out() io.Writer {
 	return ui.out
 }
 
-func (ui *UI) Status(msg string) {
-	if ui.isTTY {
-		fmt.Fprintln(ui.out, ui.styles.status.Render(msg))
-	} else {
-		fmt.Fprintln(ui.out, msg)
-	}
+// Result prints a highlighted result line to stdout.
+func (ui *UI) Result(msg string) {
+	ui.printOut(ui.styles.status, msg)
 }
 
+// Success prints a success result to stdout.
 func (ui *UI) Success(msg string) {
 	if ui.isTTY {
-		fmt.Fprintln(ui.out, ui.styles.success.Render("✓ "+msg))
-	} else {
-		fmt.Fprintln(ui.out, msg)
+		msg = "✓ " + msg
 	}
+	ui.printOut(ui.styles.success, msg)
 }
 
+// Log prints an indented result line to stdout.
 func (ui *UI) Log(line string) {
-	if ui.isTTY {
-		fmt.Fprintln(ui.out, ui.styles.logLine.Render("    "+line))
-	} else {
-		fmt.Fprintln(ui.out, "    "+line)
+	ui.printOut(ui.styles.logLine, "    "+line)
+}
+
+// Status prints a progress step to stderr.
+func (ui *UI) Status(msg string) {
+	ui.printErr(ui.errStyles.status, msg)
+}
+
+// StepSuccess prints a completed progress step to stderr.
+func (ui *UI) StepSuccess(msg string) {
+	if ui.errIsTTY {
+		msg = "✓ " + msg
 	}
+	ui.printErr(ui.errStyles.success, msg)
+}
+
+// StreamLog prints an indented line of streamed output (the build log) to stderr.
+func (ui *UI) StreamLog(line string) {
+	ui.printErr(ui.errStyles.logLine, "    "+line)
+}
+
+// Gap prints an empty separator line to stderr.
+func (ui *UI) Gap() {
+	fmt.Fprintln(ui.errOut)
 }
 
 func (ui *UI) Errorf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	if ui.isTTY {
-		fmt.Fprintln(ui.errOut, ui.styles.errMsg.Render(msg))
-	} else {
-		fmt.Fprintln(ui.errOut, msg)
-	}
+	ui.printErr(ui.errStyles.errMsg, fmt.Sprintf(format, args...))
 }
 
 func (ui *UI) DimInfo(msg string) {
-	if ui.isTTY {
-		fmt.Fprintln(ui.out, ui.styles.dimInfo.Render(msg))
-	} else {
-		fmt.Fprintln(ui.out, msg)
-	}
+	ui.printErr(ui.errStyles.dimInfo, msg)
 }
 
 // Select displays an interactive selection list. In TTY mode, uses a simple numbered
@@ -225,15 +259,15 @@ type Spinner struct {
 func (ui *UI) Spin(msg string) *Spinner {
 	s := &Spinner{ui: ui, done: make(chan struct{})}
 
-	if !ui.isTTY {
-		fmt.Fprintln(ui.out, msg)
+	if !ui.errIsTTY {
+		fmt.Fprintln(ui.errOut, msg)
 		return s
 	}
 
-	model := newSpinnerModel(msg, ui.styles)
+	model := newSpinnerModel(msg, ui.errStyles)
 	p := tea.NewProgram(
 		model,
-		tea.WithOutput(ui.ttyOut),
+		tea.WithOutput(ui.errOut),
 		tea.WithInput(nil),
 	)
 	s.program = p
@@ -252,7 +286,7 @@ func (s *Spinner) Update(msg string) {
 		s.program.Send(spinnerTextMsg(msg))
 		return
 	}
-	fmt.Fprintln(s.ui.out, msg)
+	fmt.Fprintln(s.ui.errOut, msg)
 }
 
 // Stop ends the spinner and prints a success message.
@@ -260,12 +294,11 @@ func (s *Spinner) Stop(successMsg string) {
 	if s.program != nil {
 		s.program.Send(spinnerDoneMsg{
 			text:  "✓ " + successMsg,
-			style: s.ui.styles.success,
+			style: s.ui.errStyles.success,
 		})
 		<-s.done
 	} else {
-		// non-TTY
-		fmt.Fprintln(s.ui.out, successMsg)
+		fmt.Fprintln(s.ui.errOut, successMsg)
 	}
 }
 
@@ -274,11 +307,10 @@ func (s *Spinner) Fail(errMsg string) {
 	if s.program != nil {
 		s.program.Send(spinnerDoneMsg{
 			text:  errMsg,
-			style: s.ui.styles.errMsg,
+			style: s.ui.errStyles.errMsg,
 		})
 		<-s.done
 	} else {
-		// non-TTY
 		fmt.Fprintln(s.ui.errOut, errMsg)
 	}
 }
@@ -395,15 +427,15 @@ func (ui *UI) Progress(label string, total int64) *ProgressBar {
 		label: label,
 	}
 
-	if !ui.isTTY {
-		fmt.Fprintf(ui.out, "%s (%s)...\n", label, FormatSize(total))
+	if !ui.errIsTTY {
+		fmt.Fprintf(ui.errOut, "%s (%s)...\n", label, FormatSize(total))
 		return pb
 	}
 
-	model := newProgressModel(label, ui.styles)
+	model := newProgressModel(label, ui.errStyles)
 	p := tea.NewProgram(
 		model,
-		tea.WithOutput(ui.ttyOut),
+		tea.WithOutput(ui.errOut),
 		tea.WithInput(nil),
 	)
 	pb.program = p
@@ -427,7 +459,7 @@ func (pb *ProgressBar) Update(fraction float64) {
 		defer pb.mu.Unlock()
 		for _, milestone := range []int{25, 50, 75, 100} {
 			if pct >= milestone && pb.lastMilestone < milestone {
-				fmt.Fprintf(pb.ui.out, "Upload: %d%%\n", milestone)
+				fmt.Fprintf(pb.ui.errOut, "Upload: %d%%\n", milestone)
 				pb.lastMilestone = milestone
 			}
 		}
@@ -451,7 +483,7 @@ func (pb *ProgressBar) Done() {
 		pb.program.Send(progressDoneMsg{success: true})
 		<-pb.done
 	} else {
-		fmt.Fprintln(pb.ui.out, "Upload complete")
+		fmt.Fprintln(pb.ui.errOut, "Upload complete")
 	}
 }
 
@@ -827,4 +859,18 @@ func (ui *UI) TextInput(label string) (string, error) {
 		return "", fmt.Errorf("input cancelled")
 	}
 	return m.textInput.Value(), nil
+}
+
+func (ui *UI) printOut(style lipgloss.Style, msg string) {
+	if ui.isTTY {
+		msg = style.Render(msg)
+	}
+	fmt.Fprintln(ui.out, msg)
+}
+
+func (ui *UI) printErr(style lipgloss.Style, msg string) {
+	if ui.errIsTTY {
+		msg = style.Render(msg)
+	}
+	fmt.Fprintln(ui.errOut, msg)
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -141,10 +142,7 @@ func (cmd *StatusCmd) Execute(args []string) error {
 
 	token, err := ResolveAuth()
 	if err != nil {
-		ui.Errorf("Not authenticated.")
-		ui.Log("")
-		ui.Log("Run 'tx login' to log in to TexOps.")
-		return nil
+		return authError(errors.New("Not authenticated. Run 'tx login' to log in to TexOps."))
 	}
 
 	apiURL := ResolveAPIURL(Config{})
@@ -154,12 +152,9 @@ func (cmd *StatusCmd) Execute(args []string) error {
 	resp, err := api.Whoami()
 	if err != nil {
 		sp.Fail("Authentication check failed")
-		var apiErr *APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
-			ui.Errorf("Session expired. Run 'tx login' to re-authenticate.")
-			return nil
+		if apiErr, ok := errors.AsType[*APIError](err); ok && apiErr.StatusCode == http.StatusUnauthorized {
+			return authError(errors.New("Session expired. Run 'tx login' to re-authenticate."))
 		}
-		ui.Errorf("Error: %s", err)
 		return err
 	}
 	sp.Stop("Connected")
@@ -192,7 +187,7 @@ func (cmd *LoginCmd) Execute(args []string) error {
 	sp := ui.Spin("Requesting login code...")
 	dcResp, err := api.RequestDeviceCode()
 	if err != nil {
-		sp.Fail(fmt.Sprintf("Failed to request login code: %s", err))
+		sp.Fail("Failed to request login code")
 		return err
 	}
 	sp.Stop("Login code received")
@@ -229,7 +224,7 @@ func (cmd *LoginCmd) Execute(args []string) error {
 			sp.Fail("Login code expired")
 			return fmt.Errorf("login code expired; please run 'tx login' again")
 		}
-		sp.Fail(fmt.Sprintf("Token polling failed: %s", err))
+		sp.Fail("Token polling failed")
 		return err
 	}
 	sp.Stop("Authorized")
@@ -419,13 +414,13 @@ func (cmd *InitCmd) Execute(args []string) error {
 
 	configPath := filepath.Join(dir, ".texops.yaml")
 	if _, err := os.Stat(configPath); err == nil {
-		return fmt.Errorf(".texops.yaml already exists")
+		return configError(errors.New(".texops.yaml already exists"))
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("cannot check .texops.yaml: %w", err)
 	}
 
 	if cmd.Compiler != "" && !isValidCompiler(cmd.Compiler) {
-		return fmt.Errorf("invalid compiler %q: allowed values are %s", cmd.Compiler, strings.Join(AllowedCompilers, ", "))
+		return usageErrorf("invalid compiler %q: allowed values are %s", cmd.Compiler, strings.Join(AllowedCompilers, ", "))
 	}
 
 	return initProject(dir, cmd.Texlive, cmd.Compiler, cmd.Main, ui)
@@ -550,17 +545,17 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return err
+			return configError(err)
 		}
 		if !ui.IsTTY() {
-			return errInitDeclined
+			return configError(errInitDeclined)
 		}
 		confirmed, confirmErr := ui.Confirm("No .texops.yaml found. Initialize project now?")
 		if confirmErr != nil {
 			return confirmErr
 		}
 		if !confirmed {
-			return errInitDeclined
+			return configError(errInitDeclined)
 		}
 		if initErr := initProject(dir, "", "", "main.tex", ui); initErr != nil {
 			return initErr
@@ -573,7 +568,7 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 
 	config, err := ParseConfig(string(configData))
 	if err != nil {
-		return err
+		return configError(err)
 	}
 
 	// Resolve document list: filter by name or use all
@@ -582,7 +577,7 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 		for _, name := range names {
 			doc, ok := config.DocumentByName(name)
 			if !ok {
-				return fmt.Errorf("unknown document %q; available: %s", name, docNames(config.Documents))
+				return usageErrorf("unknown document %q; available: %s", name, docNames(config.Documents))
 			}
 			docs = append(docs, doc)
 		}
@@ -620,8 +615,8 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 	sp := ui.Spin("Resolving project...")
 	project, err := api.CreateProject(ctx, filepath.Base(dir), config.Texlive, config.ProjectKey)
 	if err != nil {
-		sp.Fail(fmt.Sprintf("Failed to resolve project: %s", err))
-		return err
+		sp.Fail("Failed to resolve project")
+		return classifyVersionError(err)
 	}
 	sp.Stop("Project ready")
 	projectID := project.ID
@@ -650,8 +645,8 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 		}
 	}
 	elapsed := time.Since(buildStart)
-	ui.Log("")
-	ui.Status(fmt.Sprintf("Build complete: %d succeeded, %d failed (%.1fs)", succeeded, failed, elapsed.Seconds()))
+	ui.Gap()
+	ui.Result(fmt.Sprintf("Build complete: %d succeeded, %d failed (%.1fs)", succeeded, failed, elapsed.Seconds()))
 	for _, r := range results {
 		if r.Success {
 			ui.Log(fmt.Sprintf("  %s => %s", r.Name, r.Output))
@@ -664,13 +659,16 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 		return watchAndBuild(ctx, dir, p)
 	}
 
-	for _, r := range results {
-		if !r.Success {
-			return fmt.Errorf("one or more documents failed to build")
-		}
-	}
+	return buildResultsError(results)
+}
 
-	return nil
+// classifyVersionError marks the server's 400 for an unsupported TeX Live
+// version as a project config error.
+func classifyVersionError(err error) error {
+	if apiErr, ok := errors.AsType[*APIError](err); ok && apiErr.StatusCode == http.StatusBadRequest {
+		return configError(err)
+	}
+	return err
 }
 
 func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
@@ -681,7 +679,7 @@ func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
 			sp.Cancel()
 			return nil, ctx.Err()
 		}
-		sp.Fail(fmt.Sprintf("Failed to collect files: %s", err))
+		sp.Fail("Failed to collect files")
 		return nil, err
 	}
 
@@ -730,7 +728,7 @@ func buildOnce(ctx context.Context, p buildParams) ([]docResult, error) {
 			}
 			sp.Fail(fmt.Sprintf("Failed to get session: %s", err))
 			for _, doc := range group.docs {
-				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: err})
+				results = append(results, docResult{Name: doc.Name, Output: doc.Output, Err: classifyVersionError(err)})
 			}
 			continue
 		}
@@ -882,7 +880,7 @@ func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID,
 	}
 	compileStart := time.Now()
 	result, err := inst.Build(ctx, projectID, doc.Main, doc.Directory, doc.Texlive, doc.Compiler, buildOptions, func(line string) {
-		ui.Log(line)
+		ui.StreamLog(line)
 	})
 	if err != nil {
 		ui.Errorf("Build request failed: %s", err)
@@ -891,7 +889,7 @@ func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID,
 
 	if result.Status == "success" && result.PdfURL != "" {
 		compileElapsed := time.Since(compileStart)
-		ui.Success(fmt.Sprintf("Build complete (%.1fs)", compileElapsed.Seconds()))
+		ui.StepSuccess(fmt.Sprintf("Build complete (%.1fs)", compileElapsed.Seconds()))
 		outputPath := filepath.Join(dir, doc.Output)
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o750); err != nil {
 			return docResult{Name: doc.Name, Output: doc.Output, Err: fmt.Errorf("cannot create output directory: %w", err)}
@@ -922,7 +920,7 @@ func buildDocument(ctx context.Context, ui *UI, inst *InstanceClient, projectID,
 		msg = "unknown error"
 	}
 	ui.Errorf("Build failed: %s", msg)
-	return docResult{Name: doc.Name, Output: doc.Output, Err: fmt.Errorf("build failed: %s", msg)}
+	return docResult{Name: doc.Name, Output: doc.Output, Err: buildFailureError(result, fmt.Errorf("build failed: %s", msg))}
 }
 
 // docNames returns a comma-separated list of document names.
@@ -986,7 +984,7 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 	cmd.Name = strings.TrimSpace(cmd.Name)
 	if cmd.Name == "" {
 		if !ui.IsTTY() {
-			return fmt.Errorf("specify --name in non-interactive mode")
+			return usageErrorf("specify --name in non-interactive mode")
 		}
 		name, err := ui.TextInput("Token name:")
 		if err != nil {
@@ -997,7 +995,7 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 
 	// Determine expiry
 	if cmd.NoExpiry && cmd.ExpiresIn != "" {
-		return fmt.Errorf("--no-expiry and --expires-in are mutually exclusive")
+		return usageErrorf("--no-expiry and --expires-in are mutually exclusive")
 	}
 	var expiresIn *int64
 	if cmd.NoExpiry {
@@ -1005,12 +1003,12 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 	} else if cmd.ExpiresIn != "" {
 		seconds, err := parseDuration(cmd.ExpiresIn)
 		if err != nil {
-			return err
+			return usageError(err)
 		}
 		expiresIn = &seconds
 	} else {
 		if !ui.IsTTY() {
-			return fmt.Errorf("specify --expires-in or --no-expiry in non-interactive mode")
+			return usageErrorf("specify --expires-in or --no-expiry in non-interactive mode")
 		}
 		// Interactive selection
 		labels := make([]string, len(expiryOptions))
@@ -1041,17 +1039,15 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 	if err != nil {
 		sp.Fail("Failed to create token")
 		if errors.Is(err, ErrTokenConflict) {
-			ui.Errorf("A token named %q already exists.", cmd.Name)
-			return err
+			return usageError(fmt.Errorf("%w: %q", err, cmd.Name))
 		}
-		ui.Errorf("Error: %s", err)
 		return err
 	}
 	sp.Stop("Token created")
 
-	ui.Log("")
-	ui.Status(resp.Token)
-	ui.Log("")
+	ui.Gap()
+	ui.Result(resp.Token)
+	ui.Gap()
 	ui.DimInfo("This token won't be shown again. Copy it now.")
 	ui.DimInfo("Expires: " + formatDatePtr(resp.ExpiresAt, "never"))
 
@@ -1076,7 +1072,6 @@ func (cmd *TokenListCmd) Execute(args []string) error {
 	tokens, err := api.ListAPITokens()
 	if err != nil {
 		sp.Fail("Failed to list tokens")
-		ui.Errorf("Error: %s", err)
 		return err
 	}
 	sp.Stop(fmt.Sprintf("%d token(s)", len(tokens)))
@@ -1110,7 +1105,7 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 	}
 
 	if len(args) == 0 && !ui.IsTTY() {
-		return fmt.Errorf("specify token name as argument in non-interactive mode")
+		return usageErrorf("specify token name as argument in non-interactive mode")
 	}
 
 	apiURL := ResolveAPIURL(Config{})
@@ -1120,7 +1115,6 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 	tokens, err := api.ListAPITokens()
 	if err != nil {
 		sp.Fail("Failed to load tokens")
-		ui.Errorf("Error listing tokens: %s", err)
 		return err
 	}
 	sp.Stop(fmt.Sprintf("%d token(s)", len(tokens)))
@@ -1138,7 +1132,7 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 			}
 		}
 		if tokenID == "" {
-			return fmt.Errorf("token %q not found", tokenName)
+			return usageErrorf("token %q not found", tokenName)
 		}
 	} else {
 		if len(tokens) == 0 {
@@ -1172,10 +1166,8 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 	if err != nil {
 		sp.Fail("Failed to delete token")
 		if errors.Is(err, ErrTokenNotFound) {
-			ui.Errorf("Token not found (may have been already deleted).")
-			return err
+			return usageError(fmt.Errorf("%w (may have been already deleted)", err))
 		}
-		ui.Errorf("Error: %s", err)
 		return err
 	}
 	sp.Stop("Token deleted")

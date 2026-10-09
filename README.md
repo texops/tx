@@ -51,6 +51,21 @@ Project settings are stored in `.texops.yaml`:
 
 The API URL defaults to `https://api.texops.dev` and can be overridden with `TX_API_URL` or `api_url` in `.texops.yaml`.
 
+### Output and exit codes
+
+Results (the build summary, `tx status` fields, token values) go to stdout; progress, the build log and errors go to stderr.
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Service or unexpected failure (network, server error, build timeout) |
+| `2` | Usage error (unknown or missing command, unknown flag or document, missing input without a terminal) |
+| `3` | Not authenticated, or the session or token expired or was rejected |
+| `4` | `.texops.yaml` missing or invalid, or unsupported TeX Live version |
+| `5` | A document failed to compile |
+
+When documents fail for different reasons, the most severe code wins (`1`, then `3`, then `4`); `5` means every failure was a compile failure.
+
 ## License
 
 [MIT](LICENSE)

@@ -31,7 +31,7 @@ If `.texops.yaml` does not exist and stdout is a TTY, an interactive prompt offe
 
 ## `tx status`
 
-Show authentication status including email, authentication method, and token expiry. Always exits `0`, even when not authenticated.
+Show authentication status including email, authentication method, and token expiry. Exits `3` when not authenticated or when the session or token has expired or was rejected.
 
 ## `tx token create`
 
@@ -80,9 +80,19 @@ Print the `tx` version and exit. Also available as `tx --version`.
 | `$XDG_CONFIG_HOME/texops/credentials.yaml` | Credentials file when `XDG_CONFIG_HOME` is set. |
 | `~/.config/texops/credentials.yaml` | Default credentials file location. |
 
+## Output streams
+
+Results go to stdout: the build summary, the `tx status` fields, the `tx token list` table and the token value printed by `tx token create`. Progress, the streamed build log, hints and error messages go to stderr. On a terminal both appear on screen; in a pipe, stdout carries only the results. Each error is printed once, to stderr.
+
 ## Exit status
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success (including `tx status` when not authenticated). |
-| `1` | Failure: parse errors, configuration errors, build failures, runtime errors. |
+| `0` | Success, including `--help` and `tx version`. |
+| `1` | Service or unexpected failure: network errors, server errors (5xx), sync or upload failures, a build that hit the time limit or failed inside the service. |
+| `2` | Usage error: unknown command, missing subcommand or unknown flag, bad flag value, unknown document name, missing required input when there is no terminal to prompt on. |
+| `3` | Not authenticated, or the session or API token has expired or was rejected. |
+| `4` | Project configuration error: `.texops.yaml` is missing or invalid, or its TeX Live version is not supported. |
+| `5` | A document failed to compile (LaTeX errors, or no PDF was produced). |
+
+When several documents fail for different reasons, `tx build` exits with the most severe code: `1` if any failure was a service failure, otherwise `3` for an authentication failure, then `4` for a configuration failure. It exits `5` only when every failure is a compile failure.

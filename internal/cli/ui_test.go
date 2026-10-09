@@ -644,3 +644,50 @@ func TestTextInput_NonTTY_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "TTY")
 }
+
+func TestUI_SplitStreams(t *testing.T) {
+	newSplitUI := func() (*cli.UI, *bytes.Buffer, *bytes.Buffer) {
+		var out, errOut bytes.Buffer
+		return cli.NewUIWithSplitOptions(&out, &errOut, false, nil), &out, &errOut
+	}
+
+	t.Run("results go to stdout", func(t *testing.T) {
+		ui, out, errOut := newSplitUI()
+		ui.Result("Build complete")
+		ui.Success("Authenticated")
+		ui.Log("Email:   user@example.com")
+		assert.Equal(t, "Build complete\nAuthenticated\n    Email:   user@example.com\n", out.String())
+		assert.Empty(t, errOut.String())
+	})
+
+	t.Run("progress, streamed log and errors go to stderr", func(t *testing.T) {
+		ui, out, errOut := newSplitUI()
+		ui.Status("Building...")
+		ui.StreamLog("latexmk -pdf main.tex")
+		ui.StepSuccess("Build complete (1.0s)")
+		ui.DimInfo("hint")
+		ui.Gap()
+		ui.Errorf("failed: %s", "boom")
+		assert.Equal(t, "Building...\n    latexmk -pdf main.tex\nBuild complete (1.0s)\nhint\n\nfailed: boom\n", errOut.String())
+		assert.Empty(t, out.String())
+	})
+
+	t.Run("spinner goes to stderr", func(t *testing.T) {
+		ui, out, errOut := newSplitUI()
+		sp := ui.Spin("Loading...")
+		sp.Update("Still loading...")
+		sp.Stop("Loaded")
+		ui.Spin("Again...").Fail("Failed")
+		assert.Equal(t, "Loading...\nStill loading...\nLoaded\nAgain...\nFailed\n", errOut.String())
+		assert.Empty(t, out.String())
+	})
+
+	t.Run("progress bar goes to stderr", func(t *testing.T) {
+		ui, out, errOut := newSplitUI()
+		pb := ui.Progress("Uploading 1 files", 100)
+		pb.Update(1.0)
+		pb.Done()
+		assert.Equal(t, "Uploading 1 files (100 B)...\nUpload: 25%\nUpload: 50%\nUpload: 75%\nUpload: 100%\nUpload complete\n", errOut.String())
+		assert.Empty(t, out.String())
+	})
+}

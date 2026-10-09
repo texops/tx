@@ -21,12 +21,19 @@ var validIDPattern = regexp.MustCompile(`^[a-z]{3}_[0-9A-Za-z]+$`)
 
 // APIError represents an HTTP error response from the API.
 type APIError struct {
+	Op         string
 	StatusCode int
 	Body       string
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("API error (%d): %s", e.StatusCode, e.Body)
+	if e.Op == "" {
+		return fmt.Sprintf("API error (%d): %s", e.StatusCode, e.Body)
+	}
+	if e.Body == "" {
+		return fmt.Sprintf("%s failed (%d)", e.Op, e.StatusCode)
+	}
+	return fmt.Sprintf("%s failed (%d): %s", e.Op, e.StatusCode, e.Body)
 }
 
 type APIClient struct {
@@ -55,6 +62,7 @@ type BuildDoneEvent struct {
 	PdfURL  string `json:"pdfUrl,omitempty"`
 	Message string `json:"message,omitempty"`
 	BuildID string `json:"build_id,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 type DeviceCodeResponse struct {
@@ -131,7 +139,7 @@ func (c *APIClient) CreateProject(ctx context.Context, name, distVersion, projec
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return CreateProjectResponse{}, fmt.Errorf("create project failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return CreateProjectResponse{}, &APIError{Op: "create project", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result CreateProjectResponse
@@ -165,7 +173,7 @@ func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersi
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return SessionResponse{}, fmt.Errorf("get session failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return SessionResponse{}, &APIError{Op: "get session", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result SessionResponse
@@ -188,7 +196,7 @@ func (c *APIClient) RequestDeviceCode() (DeviceCodeResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return DeviceCodeResponse{}, fmt.Errorf("device code request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return DeviceCodeResponse{}, &APIError{Op: "device code request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result DeviceCodeResponse
@@ -228,7 +236,7 @@ func (c *APIClient) PollToken(deviceCode string) (TokenResponse, error) {
 	case http.StatusGone: // 410 — expired
 		return TokenResponse{}, ErrDeviceCodeExpired
 	default:
-		return TokenResponse{}, fmt.Errorf("token request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return TokenResponse{}, &APIError{Op: "token request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 }
 
@@ -246,7 +254,7 @@ func (c *APIClient) RefreshToken(jwt string) (TokenResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return TokenResponse{}, fmt.Errorf("refresh failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return TokenResponse{}, &APIError{Op: "refresh", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result TokenResponse
@@ -441,7 +449,7 @@ func (c *InstanceClient) Start(ctx context.Context, projectID string, onLog func
 		return ErrStartUnsupported
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("sandbox start failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return &APIError{Op: "sandbox start", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	done, err := ParseSSEStream(resp.Body, onLog)
@@ -480,7 +488,7 @@ func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []Fil
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return SyncResult{}, fmt.Errorf("sync failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return SyncResult{}, &APIError{Op: "sync", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result SyncResult
@@ -590,7 +598,7 @@ func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarDat
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upload failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return &APIError{Op: "upload", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 	return nil
 }
@@ -630,7 +638,7 @@ func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, dir
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return BuildDoneEvent{}, fmt.Errorf("build request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return BuildDoneEvent{}, &APIError{Op: "build request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	return ParseSSEStream(resp.Body, onLog)
@@ -668,7 +676,7 @@ func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return BuildDoneEvent{}, fmt.Errorf("build request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return BuildDoneEvent{}, &APIError{Op: "build request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	return ParseSSEStream(resp.Body, onLog)
@@ -693,7 +701,7 @@ func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, ou
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("PDF download failed (%d)", resp.StatusCode)
+		return &APIError{Op: "PDF download", StatusCode: resp.StatusCode}
 	}
 
 	return writeFilePreserveInode(resp.Body, outputPath)
@@ -730,7 +738,7 @@ func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarDat
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upload failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return &APIError{Op: "upload", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 	return nil
 }

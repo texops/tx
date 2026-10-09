@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,7 +104,7 @@ func ResolveAuth() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("not authenticated: run 'tx login' or set TX_API_TOKEN")
+	return "", authError(errors.New("not authenticated: run 'tx login' or set TX_API_TOKEN"))
 }
 
 func storeJWT(jwt string) error {

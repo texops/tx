@@ -1,13 +1,9 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"runtime/debug"
 	"strings"
-
-	flags "github.com/jessevdk/go-flags"
 
 	"github.com/texops/tx/internal/cli"
 )
@@ -29,34 +25,5 @@ func resolveVersion() string {
 }
 
 func main() {
-	var opts cli.Options
-	parser := flags.NewParser(&opts, flags.Default)
-	parser.Name = "tx"
-
-	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "version") {
-		fmt.Println("tx " + resolveVersion())
-		os.Exit(0)
-	}
-
-	ui := cli.NewUI(os.Stdout)
-	opts.Login.UI = ui
-	opts.Init.UI = ui
-	opts.Build.UI = ui
-	opts.Status.UI = ui
-	opts.Token.Create.UI = ui
-	opts.Token.List.UI = ui
-	opts.Token.Delete.UI = ui
-
-	if _, err := parser.Parse(); err != nil {
-		if flagsErr, ok := errors.AsType[*flags.Error](err); ok {
-			switch {
-			case errors.Is(flagsErr.Type, flags.ErrHelp):
-				os.Exit(0)
-			case errors.Is(flagsErr.Type, flags.ErrCommandRequired):
-				parser.WriteHelp(os.Stdout)
-				os.Exit(0)
-			}
-		}
-		os.Exit(1)
-	}
+	os.Exit(cli.Run(resolveVersion(), os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
