@@ -65,6 +65,16 @@ type BuildDoneEvent struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
+// Diagnostic is one LaTeX error or warning reported for a build.
+type Diagnostic struct {
+	Severity string `json:"severity"`
+	Kind     string `json:"kind,omitempty"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Message  string `json:"message"`
+	Context  string `json:"context,omitempty"`
+}
+
 type DeviceCodeResponse struct {
 	DeviceCode      string `json:"device_code"`
 	UserCode        string `json:"user_code"`

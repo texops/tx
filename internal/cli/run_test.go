@@ -27,6 +27,9 @@ type fakeTexOps struct {
 	syncStatus       int
 	whoamiStatus     int
 	deviceCodeStatus int
+	instanceURL      string
+	tokens           []map[string]any
+	createdToken     map[string]any
 	done             map[string]map[string]any
 
 	mu         sync.Mutex
@@ -87,6 +90,10 @@ func (f *fakeTexOps) route(w http.ResponseWriter, r *http.Request, body []byte) 
 		}
 		writeJSON(w, map[string]any{"user_id": "usr_1", "email": "user@example.com", "auth_method": "api_token"})
 	case r.Method == http.MethodGet && r.URL.Path == "/auth/tokens":
+		if f.tokens != nil {
+			writeJSON(w, f.tokens)
+			return
+		}
 		writeJSON(w, []map[string]any{{"id": "tok_1", "name": "ci", "prefix": "tx_secr", "expires_at": "2027-01-01T00:00:00Z", "created_at": "2026-10-01T00:00:00Z"}})
 	case r.Method == http.MethodPost && r.URL.Path == "/auth/device-code":
 		if f.deviceCodeStatus != 0 {
@@ -95,8 +102,16 @@ func (f *fakeTexOps) route(w http.ResponseWriter, r *http.Request, body []byte) 
 			return
 		}
 		writeJSON(w, map[string]any{"device_code": "dev_1", "user_code": "ABCD-EFGH", "verification_url": f.srv.URL + "/verify", "expires_in": 1})
+	case r.Method == http.MethodPost && r.URL.Path == "/auth/token":
+		writeJSON(w, map[string]any{"jwt": "header.payload.sig", "expires_at": "2027-01-01T00:00:00Z"})
+	case r.Method == http.MethodDelete && r.URL.Path == "/auth/tokens/tok_1":
+		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodPost && r.URL.Path == "/auth/tokens":
 		w.WriteHeader(http.StatusCreated)
+		if f.createdToken != nil {
+			writeJSON(w, f.createdToken)
+			return
+		}
 		writeJSON(w, map[string]any{"token": "tx_secret_value", "id": "tok_1", "name": "ci", "prefix": "tx_secr", "created_at": "2026-10-01T00:00:00Z"})
 	case r.Method == http.MethodPost && r.URL.Path == "/api/projects":
 		if f.projectStatus != 0 {
@@ -111,7 +126,11 @@ func (f *fakeTexOps) route(w http.ResponseWriter, r *http.Request, body []byte) 
 			w.Write([]byte(`{"error":"session unavailable"}`))
 			return
 		}
-		writeJSON(w, map[string]any{"instance_url": f.srv.URL, "jwt": "instance-jwt"})
+		instanceURL := f.srv.URL
+		if f.instanceURL != "" {
+			instanceURL = f.instanceURL
+		}
+		writeJSON(w, map[string]any{"instance_url": instanceURL, "jwt": "instance-jwt"})
 	case r.Method == http.MethodPost && r.URL.Path == "/projects/prj_test/sync":
 		if f.syncStatus != 0 {
 			w.WriteHeader(f.syncStatus)

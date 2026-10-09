@@ -31,6 +31,13 @@ func Run(version string, args []string, stdin io.Reader, stdout, stderr io.Write
 
 	parser := flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash)
 	parser.Name = "tx"
+	parser.CommandHandler = func(command flags.Commander, args []string) error {
+		ui.SetJSON(opts.JSON)
+		if command == nil {
+			return nil
+		}
+		return command.Execute(args)
+	}
 
 	_, err := parser.ParseArgs(args)
 	if err == nil {
@@ -51,6 +58,25 @@ func Run(version string, args []string, stdin io.Reader, stdout, stderr io.Write
 		err = usageError(err)
 	}
 
+	if opts.JSON || hasJSONFlag(args) {
+		ui.SetJSON(true)
+	}
 	ui.Errorf("%s", err.Error())
+	if ui.JSON() && !ui.wroteJSON {
+		writeErrorJSON(ui, err)
+	}
 	return AsExitError(err).Code
+}
+
+// hasJSONFlag finds --json in arguments that failed to parse.
+func hasJSONFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "--json" {
+			return true
+		}
+	}
+	return false
 }

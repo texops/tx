@@ -81,9 +81,20 @@ func jwtExpiry(token string) time.Time {
 // JWT from keyring. Each source can override the ones below it.
 // If a JWT is found but expired, it falls through to the next source.
 func ResolveAuth() (string, error) {
+	token, _, err := resolveAuthWithSource()
+	return token, err
+}
+
+const (
+	authSourceEnv     = "env"
+	authSourceFile    = "file"
+	authSourceKeyring = "keyring"
+)
+
+func resolveAuthWithSource() (string, string, error) {
 	// 1. API token from environment variable (highest priority override)
 	if token := os.Getenv("TX_API_TOKEN"); token != "" {
-		return token, nil
+		return token, authSourceEnv, nil
 	}
 
 	// 2. JWT from credentials file (explicit file override)
@@ -91,7 +102,7 @@ func ResolveAuth() (string, error) {
 		if exp := jwtExpiry(jwt); !exp.IsZero() && exp.Before(time.Now()) {
 			// JWT expired, fall through
 		} else {
-			return jwt, nil
+			return jwt, authSourceFile, nil
 		}
 	}
 
@@ -100,11 +111,11 @@ func ResolveAuth() (string, error) {
 		if exp := jwtExpiry(jwt); !exp.IsZero() && exp.Before(time.Now()) {
 			// JWT expired, fall through
 		} else {
-			return jwt, nil
+			return jwt, authSourceKeyring, nil
 		}
 	}
 
-	return "", authError(errors.New("not authenticated: run 'tx login' or set TX_API_TOKEN"))
+	return "", "", authError(errors.New("not authenticated: run 'tx login' or set TX_API_TOKEN"))
 }
 
 func storeJWT(jwt string) error {

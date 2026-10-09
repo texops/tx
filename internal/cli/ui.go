@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -40,6 +41,8 @@ type UI struct {
 	in         io.Reader
 	styles     uiStyles
 	errStyles  uiStyles
+	json       bool
+	wroteJSON  bool
 }
 
 func newStyles(hasDarkBG bool, r *lipgloss.Renderer) uiStyles {
@@ -146,6 +149,29 @@ func (ui *UI) IsInteractive() bool {
 
 func (ui *UI) Out() io.Writer {
 	return ui.out
+}
+
+// SetJSON switches the UI to JSON mode: stdout carries only the JSON
+// document, progress goes to stderr as plain lines and nothing prompts.
+func (ui *UI) SetJSON(on bool) {
+	ui.json = on
+	if on {
+		ui.isTTY = false
+		ui.errIsTTY = false
+		ui.stdinIsTTY = false
+	}
+}
+
+func (ui *UI) JSON() bool {
+	return ui.json
+}
+
+// WriteJSON writes v to stdout as the command's single JSON document.
+func (ui *UI) WriteJSON(v any) error {
+	ui.wroteJSON = true
+	enc := json.NewEncoder(ui.out)
+	enc.SetEscapeHTML(false)
+	return enc.Encode(v)
 }
 
 // Result prints a highlighted result line to stdout.
@@ -862,6 +888,10 @@ func (ui *UI) TextInput(label string) (string, error) {
 }
 
 func (ui *UI) printOut(style lipgloss.Style, msg string) {
+	if ui.json {
+		fmt.Fprintln(ui.errOut, msg)
+		return
+	}
 	if ui.isTTY {
 		msg = style.Render(msg)
 	}

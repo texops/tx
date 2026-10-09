@@ -85,19 +85,25 @@ func isNetworkError(err error) bool {
 	return ok
 }
 
-// buildFailureError maps a failed build's done event to an exit code: the
-// server's reason decides; an old server without a reason counts as a LaTeX
-// failure when it allocated a build.
+// buildFailureReason is the server's reason for a failed build; an old server
+// without a reason counts as a LaTeX failure when it allocated a build.
+func buildFailureReason(done BuildDoneEvent) string {
+	switch {
+	case done.Reason != "":
+		return done.Reason
+	case done.BuildID != "":
+		return "latex_error"
+	}
+	return "internal"
+}
+
+// buildFailureError maps a failed build's done event to an exit code.
 func buildFailureError(done BuildDoneEvent, err error) error {
-	switch done.Reason {
+	switch buildFailureReason(done) {
 	case "latex_error", "no_pdf":
 		return &ExitError{Code: ExitBuildFailed, Kind: KindBuildFailed, Err: err}
 	case "timeout":
 		return &ExitError{Code: ExitFailure, Kind: KindTimeout, Err: err}
-	case "":
-		if done.BuildID != "" {
-			return &ExitError{Code: ExitBuildFailed, Kind: KindBuildFailed, Err: err}
-		}
 	}
 	return &ExitError{Code: ExitFailure, Kind: KindInternal, Err: err}
 }
