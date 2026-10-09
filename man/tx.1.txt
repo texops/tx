@@ -10,7 +10,7 @@ SYNOPSIS
      tx status
      tx token create [--name name] [--expires-in duration] [--no-expiry]
      tx token list
-     tx token delete [name]
+     tx token delete [-y | --yes] [name]
      tx version
      tx --version
 
@@ -52,16 +52,19 @@ COMMANDS
      non-interactive mode, all discovered documents are included
      automatically.
 
-     The interactive prompts for TeX Live version, compiler, and documents
-     require both stdin and stdout to be a TTY.  When either is not a TTY, the
-     defaults are used: 2025, pdflatex as the compiler, and all discovered
-     documents.
+     The supported TeX Live versions are fetched from the service; when it
+     cannot be reached, a built-in list is used.  The interactive prompts for
+     TeX Live version, compiler, and documents require both stdin and stdout
+     to be a TTY.  When either is not a TTY, the defaults are used: the newest
+     TeX Live version, pdflatex as the compiler, and all discovered documents.
 
      Flags:
 
      --texlive version
              TeX Live distribution version (e.g. "2025").  Skips the
-             interactive version prompt.
+             interactive version prompt.  Must be a version the service
+             supports; otherwise tx exits 2, lists the supported versions and
+             writes nothing.
 
      --compiler name
              LaTeX compiler.  Must be one of: pdflatex, xelatex, lualatex,
@@ -79,9 +82,9 @@ COMMANDS
      are built.  On success, each built PDF is downloaded to the local output
      path defined in .texops.yaml.
 
-     If .texops.yaml does not exist and stdout is a TTY, an interactive prompt
-     offers to run init first.  When stdout is not a TTY, the build fails with
-     an error.
+     If .texops.yaml does not exist and both stdin and stdout are a TTY, an
+     interactive prompt offers to run init first.  Otherwise the build fails
+     with exit status 4.
 
      Flags:
 
@@ -130,11 +133,17 @@ COMMANDS
 
    token delete
      Delete an API token.  When a name argument is given, the matching token
-     is deleted after confirmation.  When stdout is not a TTY, this
-     confirmation defaults to yes.  When no argument is given and stdout is a
-     TTY, an interactive selection list is presented; if there are no tokens,
-     a message is shown instead.  In non-interactive mode, a token name
-     argument is required.
+     is deleted after confirmation.  Confirmation requires both stdin and
+     stdout to be a TTY; without one, or with --json, the command exits 2 and
+     deletes nothing unless --yes is given.  When no argument is given, stdout
+     is a TTY, and either stdin is a TTY or --yes is given, an interactive
+     selection list is presented; if there are no tokens, a message is shown
+     instead.  In non-interactive mode, a token name argument is required.
+
+     Flags:
+
+     -y, --yes
+             Delete without asking for confirmation, also on a terminal.
 
    version
      Print the tx version and exit.  The same output is available via tx
@@ -294,8 +303,10 @@ EXIT STATUS
              failed inside the service.
 
      2       Usage error: unknown command, missing subcommand or unknown flag,
-             bad flag value, unknown document name, or missing required input
-             when there is no terminal to prompt on.
+             bad flag value (including an unsupported --texlive or
+             --compiler), unknown document name, missing required input when
+             there is no terminal to prompt on, or token delete without --yes
+             when there is no terminal to confirm on.
 
      3       Not authenticated, or the session or API token has expired or was
              rejected.

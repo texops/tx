@@ -19,7 +19,8 @@ var AllowedCompilers = []string{"pdflatex", "xelatex", "lualatex", "latex", "pla
 
 const defaultCompiler = "pdflatex"
 
-// TexliveVersions lists available TexLive distribution versions (newest first).
+// TexliveVersions is the built-in list of TeX Live versions (newest first),
+// used when the API's list of distributions cannot be fetched.
 var TexliveVersions = []string{"2025", "2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013"}
 
 // generateProjectKey returns a 22-character random base62 string.

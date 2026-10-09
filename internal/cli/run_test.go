@@ -30,6 +30,7 @@ type fakeTexOps struct {
 	instanceURL      string
 	tokens           []map[string]any
 	createdToken     map[string]any
+	distributions    string
 	done             map[string]map[string]any
 
 	mu         sync.Mutex
@@ -104,6 +105,13 @@ func (f *fakeTexOps) route(w http.ResponseWriter, r *http.Request, body []byte) 
 		writeJSON(w, map[string]any{"device_code": "dev_1", "user_code": "ABCD-EFGH", "verification_url": f.srv.URL + "/verify", "expires_in": 1})
 	case r.Method == http.MethodPost && r.URL.Path == "/auth/token":
 		writeJSON(w, map[string]any{"jwt": "header.payload.sig", "expires_at": "2027-01-01T00:00:00Z"})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/distributions":
+		if f.distributions == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(f.distributions))
 	case r.Method == http.MethodDelete && r.URL.Path == "/auth/tokens/tok_1":
 		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodPost && r.URL.Path == "/auth/tokens":
@@ -308,13 +316,15 @@ func TestRunExitCodes(t *testing.T) {
 	})
 
 	t.Run("bad flag value exits 2", func(t *testing.T) {
+		f := newFakeTexOps(t)
 		projectDir(t, "")
 
-		r := runTx(t, nil, "init", "--compiler", "tex")
+		r := runTx(t, f, "init", "--compiler", "tex")
 
 		assert.Equal(t, cli.ExitUsage, r.code, r)
-		assert.Contains(t, r.stderr, `invalid compiler "tex"`, r)
+		assert.Equal(t, "Invalid value `tex' for option `--compiler'. Allowed values are: pdflatex, xelatex, lualatex, latex, platex or uplatex\n", r.stderr, r)
 		assert.NoFileExists(t, ".texops.yaml", r)
+		assert.Empty(t, r.requests, r)
 	})
 
 	t.Run("unknown document name exits 2", func(t *testing.T) {
@@ -612,8 +622,8 @@ func TestRunOutputStreams(t *testing.T) {
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.Equal(t,
-			"    NAME                 PREFIX       EXPIRES        LAST USED      CREATED     \n"+
-				"    ci                   tx_secr      01 Jan 2027    never          01 Oct 2026 \n",
+			"    NAME PREFIX       EXPIRES        LAST USED      CREATED     \n"+
+				"    ci   tx_secr      01 Jan 2027    never          01 Oct 2026 \n",
 			r.stdout, r)
 		assert.Equal(t, "Loading tokens...\n1 token(s)\n", r.stderr, r)
 	})

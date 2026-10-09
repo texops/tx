@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -66,7 +67,8 @@ type TokenListCmd struct {
 }
 
 type TokenDeleteCmd struct {
-	UI *UI `no-flag:"true"`
+	Yes bool `short:"y" long:"yes" description:"Delete without asking for confirmation"`
+	UI  *UI  `no-flag:"true"`
 }
 
 type StatusCmd struct {
@@ -79,7 +81,7 @@ type LoginCmd struct {
 
 type InitCmd struct {
 	Texlive  string `long:"texlive" description:"TexLive distribution version"`
-	Compiler string `long:"compiler" description:"LaTeX compiler (pdflatex, xelatex, lualatex, latex, platex, uplatex)"`
+	Compiler string `long:"compiler" description:"LaTeX compiler" choice:"pdflatex" choice:"xelatex" choice:"lualatex" choice:"latex" choice:"platex" choice:"uplatex"`
 	Main     string `long:"main" default:"main.tex" description:"Main TeX file (fallback when no .tex files discovered)"`
 	UI       *UI    `no-flag:"true"`
 }
@@ -443,25 +445,47 @@ func (cmd *InitCmd) Execute(args []string) error {
 		return usageErrorf("invalid compiler %q: allowed values are %s", cmd.Compiler, strings.Join(AllowedCompilers, ", "))
 	}
 
-	res, err := initProject(dir, cmd.Texlive, cmd.Compiler, cmd.Main, ui)
+	dists := texliveDistributions(context.Background())
+	if cmd.Texlive != "" && !slices.Contains(dists.Versions, cmd.Texlive) {
+		return usageErrorf("invalid --texlive %q: supported versions are %s", cmd.Texlive, strings.Join(dists.Versions, ", "))
+	}
+
+	res, err := initProject(dir, cmd.Texlive, cmd.Compiler, cmd.Main, dists, ui)
 	if err != nil {
 		return err
 	}
 	return renderInit(ui, res)
 }
 
-func initProject(dir, texlive, compiler, mainFallback string, ui *UI) (initResult, error) {
+const distributionsTimeout = 5 * time.Second
+
+// texliveDistributions asks the API for the supported TeX Live versions and
+// falls back to the built-in TexliveVersions when it cannot.
+func texliveDistributions(ctx context.Context) DistributionsResponse {
+	ctx, cancel := context.WithTimeout(ctx, distributionsTimeout)
+	defer cancel()
+	dists, err := NewUnauthenticatedAPIClient(ResolveAPIURL(Config{})).Distributions(ctx)
+	if err != nil || len(dists.Versions) == 0 {
+		return DistributionsResponse{Versions: TexliveVersions, Default: TexliveVersions[0]}
+	}
+	if !slices.Contains(dists.Versions, dists.Default) {
+		dists.Default = dists.Versions[0]
+	}
+	return dists
+}
+
+func initProject(dir, texlive, compiler, mainFallback string, dists DistributionsResponse, ui *UI) (initResult, error) {
 	configPath := filepath.Join(dir, ".texops.yaml")
 
 	if texlive == "" {
 		if ui.IsInteractive() {
-			idx, err := ui.SelectOne("TexLive version:", TexliveVersions)
+			idx, err := ui.SelectOne("TexLive version:", dists.Versions)
 			if err != nil {
 				return initResult{}, fmt.Errorf("TexLive selection failed: %w", err)
 			}
-			texlive = TexliveVersions[idx]
+			texlive = dists.Versions[idx]
 		} else {
-			texlive = TexliveVersions[0]
+			texlive = dists.Default
 		}
 	}
 
@@ -579,7 +603,7 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 		if !os.IsNotExist(err) {
 			return configError(err)
 		}
-		if !ui.IsTTY() {
+		if !ui.IsInteractive() {
 			return configError(errInitDeclined)
 		}
 		confirmed, confirmErr := ui.Confirm("No .texops.yaml found. Initialize project now?")
@@ -589,7 +613,7 @@ func runBuild(ctx context.Context, dir string, names []string, noCache bool, liv
 		if !confirmed {
 			return configError(errInitDeclined)
 		}
-		res, initErr := initProject(dir, "", "", "main.tex", ui)
+		res, initErr := initProject(dir, "", "", "main.tex", texliveDistributions(ctx), ui)
 		if initErr != nil {
 			return initErr
 		}
@@ -1117,13 +1141,19 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 		ui = defaultUI()
 	}
 
+	if len(args) == 0 && !ui.IsTTY() {
+		return usageErrorf("specify token name as argument in non-interactive mode")
+	}
+	if !cmd.Yes && !ui.IsInteractive() {
+		if len(args) == 0 {
+			return usageErrorf("refusing to delete a token without confirmation; pass --yes")
+		}
+		return usageErrorf("refusing to delete token %q without confirmation; pass --yes", args[0])
+	}
+
 	authToken, err := ResolveAuth()
 	if err != nil {
 		return err
-	}
-
-	if len(args) == 0 && !ui.IsTTY() {
-		return usageErrorf("specify token name as argument in non-interactive mode")
 	}
 
 	apiURL := ResolveAPIURL(Config{})
@@ -1169,14 +1199,15 @@ func (cmd *TokenDeleteCmd) Execute(args []string) error {
 		tokenName = tokens[idx].Name
 	}
 
-	// Confirm deletion
-	confirmed, err := ui.Confirm(fmt.Sprintf("Delete token %q?", tokenName))
-	if err != nil {
-		return err
-	}
-	if !confirmed {
-		ui.DimInfo("Cancelled.")
-		return nil
+	if !cmd.Yes {
+		confirmed, err := ui.Confirm(fmt.Sprintf("Delete token %q?", tokenName))
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			ui.DimInfo("Cancelled.")
+			return nil
+		}
 	}
 
 	sp = ui.Spin("Deleting token...")

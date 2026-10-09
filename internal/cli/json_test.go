@@ -400,7 +400,7 @@ func TestRunJSONToken(t *testing.T) {
 	t.Run("token delete", func(t *testing.T) {
 		f := newFakeTexOps(t)
 
-		r := runTx(t, f, "token", "delete", "ci", "--json")
+		r := runTx(t, f, "token", "delete", "ci", "--yes", "--json")
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.JSONEq(t, `{"deleted": "ci"}`, r.stdout, r)
@@ -411,9 +411,10 @@ func TestRunJSONToken(t *testing.T) {
 
 func TestRunJSONInit(t *testing.T) {
 	t.Run("discovered documents", func(t *testing.T) {
+		f := newFakeTexOps(t)
 		dir := projectDir(t, "")
 
-		r := runTx(t, nil, "init", "--texlive", "2024", "--compiler", "xelatex", "--json")
+		r := runTx(t, f, "init", "--texlive", "2024", "--compiler", "xelatex", "--json")
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		assert.JSONEq(t, `{"config": ".texops.yaml", "texlive": "2024", "compiler": "xelatex", "documents": [{"name": "paper", "main": "paper.tex"}, {"name": "slides", "main": "slides.tex"}]}`, r.stdout, r)
@@ -426,8 +427,9 @@ func TestRunJSONInit(t *testing.T) {
 		require.NoError(t, os.Mkdir(dir+"/thesis", 0o750))
 		require.NoError(t, os.WriteFile(dir+"/thesis/thesis.tex", []byte("\\documentclass{article}"), 0o600))
 		t.Chdir(dir)
+		f := newFakeTexOps(t)
 
-		r := runTx(t, nil, "--json", "init")
+		r := runTx(t, f, "--json", "init")
 
 		require.Equal(t, cli.ExitOK, r.code, r)
 		var doc map[string]any

@@ -28,6 +28,7 @@
 .Cm token list
 .Nm
 .Cm token delete
+.Op Fl y | -yes
 .Op Ar name
 .Nm
 .Cm version
@@ -83,10 +84,12 @@ files containing
 In interactive mode, discovered documents are presented for selection.
 In non-interactive mode, all discovered documents are included automatically.
 .Pp
+The supported TeX Live versions are fetched from the service; when it cannot
+be reached, a built-in list is used.
 The interactive prompts for TeX Live version, compiler, and documents
 require both stdin and stdout to be a TTY.
 When either is not a TTY, the defaults are used:
-.Cm 2025 ,
+the newest TeX Live version,
 .Cm pdflatex
 as the compiler, and all discovered documents.
 .Pp
@@ -96,6 +99,9 @@ Flags:
 TeX Live distribution version
 .Pq e.g.\& Qq 2025 .
 Skips the interactive version prompt.
+Must be a version the service supports; otherwise
+.Nm
+exits 2, lists the supported versions and writes nothing.
 .It Fl -compiler Ar name
 LaTeX compiler.
 Must be one of:
@@ -119,10 +125,11 @@ On success, each built PDF is downloaded to the local output path defined in
 .Pp
 If
 .Pa .texops.yaml
-does not exist and stdout is a TTY, an interactive prompt offers to run
+does not exist and both stdin and stdout are a TTY, an interactive prompt
+offers to run
 .Cm init
 first.
-When stdout is not a TTY, the build fails with an error.
+Otherwise the build fails with exit status 4.
 .Pp
 Flags:
 .Bl -tag -width Ds
@@ -187,10 +194,22 @@ Delete an API token.
 When a
 .Ar name
 argument is given, the matching token is deleted after confirmation.
-When stdout is not a TTY, this confirmation defaults to yes.
-When no argument is given and stdout is a TTY, an interactive selection list
-is presented; if there are no tokens, a message is shown instead.
+Confirmation requires both stdin and stdout to be a TTY; without one, or with
+.Fl -json ,
+the command exits 2 and deletes nothing unless
+.Fl -yes
+is given.
+When no argument is given, stdout is a TTY, and either stdin is a TTY or
+.Fl -yes
+is given, an interactive selection list is presented; if there are no tokens,
+a message is shown instead.
 In non-interactive mode, a token name argument is required.
+.Pp
+Flags:
+.Bl -tag -width Ds
+.It Fl y , Fl -yes
+Delete without asking for confirmation, also on a terminal.
+.El
 .Ss version
 Print the
 .Nm
@@ -429,8 +448,15 @@ Service or unexpected failure: network errors, server errors, sync or upload
 failures, or a build that hit the time limit or failed inside the service.
 .It 2
 Usage error: unknown command, missing subcommand or unknown flag, bad flag
-value, unknown document name,
-or missing required input when there is no terminal to prompt on.
+value
+.Pq including an unsupported Fl -texlive No or Fl -compiler ,
+unknown document name,
+missing required input when there is no terminal to prompt on,
+or
+.Cm token delete
+without
+.Fl -yes
+when there is no terminal to confirm on.
 .It 3
 Not authenticated, or the session or API token has expired or was rejected.
 .It 4

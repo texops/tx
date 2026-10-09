@@ -402,6 +402,36 @@ func (c *APIClient) ListAPITokens() ([]APITokenListItem, error) {
 	return result, nil
 }
 
+// DistributionsResponse lists the TeX Live versions the API accepts, newest first.
+type DistributionsResponse struct {
+	Versions []string `json:"versions"`
+	Default  string   `json:"default"`
+}
+
+// Distributions fetches the supported TeX Live versions. It needs no authentication.
+func (c *APIClient) Distributions(ctx context.Context) (DistributionsResponse, error) {
+	req, err := newRequest(ctx, "GET", c.baseURL+"/api/distributions", nil)
+	if err != nil {
+		return DistributionsResponse{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return DistributionsResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return DistributionsResponse{}, &APIError{Op: "list distributions", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
+	}
+
+	var result DistributionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return DistributionsResponse{}, err
+	}
+	return result, nil
+}
+
 func (c *APIClient) DeleteAPIToken(tokenID string) error {
 	if !validIDPattern.MatchString(tokenID) {
 		return fmt.Errorf("invalid token ID format")

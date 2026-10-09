@@ -12,17 +12,19 @@ Authenticate with the TexOps service using the device code flow. A one-time code
 
 Create a `.texops.yaml` configuration file in the current directory. Recursively discovers `.tex` files containing `\documentclass` and presents them for selection.
 
+The supported TeX Live versions come from the service (`GET /api/distributions`); when it cannot be reached, `tx` uses its built-in list. Without a terminal (stdin and stdout), `tx init` does not prompt: it uses the newest version, `pdflatex` and every discovered document.
+
 | Flag | Description |
 |------|-------------|
-| `--texlive <version>` | TeX Live distribution version, e.g. `"2025"`. Skips the interactive prompt. |
-| `--compiler <name>` | LaTeX compiler (`pdflatex`, `xelatex`, `lualatex`, `latex`, `platex`, `uplatex`). Skips the interactive prompt. |
+| `--texlive <version>` | TeX Live distribution version, e.g. `"2025"`. Skips the interactive prompt. Must be a version the service supports; otherwise `tx init` exits `2`, lists the supported versions and writes nothing. |
+| `--compiler <name>` | LaTeX compiler (`pdflatex`, `xelatex`, `lualatex`, `latex`, `platex`, `uplatex`). Skips the interactive prompt. Any other value exits `2`. |
 | `--main <file>` | Fallback main `.tex` file, used only when recursive discovery finds no `.tex` files containing `\documentclass`. Does not override discovered documents. Defaults to `main.tex`. |
 
 ## `tx build`
 
 Build one or more documents defined in `.texops.yaml`. Positional arguments select documents by name; when none are given, all documents are built. On success, each PDF is downloaded to the output path defined in the config.
 
-If `.texops.yaml` does not exist and stdout is a TTY, an interactive prompt offers to run `tx init` first. When stdout is not a TTY, the build fails with an error.
+If `.texops.yaml` does not exist and both stdin and stdout are a TTY, an interactive prompt offers to run `tx init` first. Otherwise the build fails with exit code `4`.
 
 | Flag | Description |
 |------|-------------|
@@ -49,7 +51,13 @@ List all API tokens with their name, prefix, expiry, last-used date, and creatio
 
 ## `tx token delete [name]`
 
-Delete an API token. With a name argument, deletes the matching token after confirmation. Without a name argument in interactive mode, presents a selection list.
+Delete an API token. With a name argument, deletes the matching token after confirmation. Without a name argument, when stdout is a TTY and either stdin is a TTY or `--yes` is given, presents a selection list.
+
+Without a terminal (stdin and stdout), or with `--json`, `tx` cannot ask for confirmation: it exits `2` without deleting anything unless `--yes` is given.
+
+| Flag | Description |
+|------|-------------|
+| `-y`, `--yes` | Delete without asking for confirmation, also on a terminal. |
 
 ## `tx version`
 
@@ -90,7 +98,7 @@ Results go to stdout: the build summary, the `tx status` fields, the `tx token l
 |------|---------|
 | `0` | Success, including `--help` and `tx version`. |
 | `1` | Service or unexpected failure: network errors, server errors (5xx), sync or upload failures, a build that hit the time limit or failed inside the service. |
-| `2` | Usage error: unknown command, missing subcommand or unknown flag, bad flag value, unknown document name, missing required input when there is no terminal to prompt on. |
+| `2` | Usage error: unknown command, missing subcommand or unknown flag, bad flag value (including an unsupported `--texlive` or `--compiler`), unknown document name, missing required input when there is no terminal to prompt on, `tx token delete` without `--yes` when there is no terminal to confirm on. |
 | `3` | Not authenticated, or the session or API token has expired or was rejected. |
 | `4` | Project configuration error: `.texops.yaml` is missing or invalid, or its TeX Live version is not supported. |
 | `5` | A document failed to compile (LaTeX errors, or no PDF was produced). |

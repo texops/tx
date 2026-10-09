@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type errorJSON struct {
@@ -197,12 +199,19 @@ func renderTokenList(ui *UI, tokens []APITokenListItem) error {
 		ui.DimInfo("No tokens found. Create one with 'tx token create --name <name>'.")
 		return nil
 	}
-	ui.Log(fmt.Sprintf("%-20s %-12s %-14s %-14s %-12s", "NAME", "PREFIX", "EXPIRES", "LAST USED", "CREATED"))
+	nameWidth := len("NAME")
+	for _, tok := range tokens {
+		nameWidth = max(nameWidth, utf8.RuneCountInString(tok.Name))
+	}
+	padName := func(name string) string {
+		return name + strings.Repeat(" ", nameWidth-utf8.RuneCountInString(name))
+	}
+	ui.Log(fmt.Sprintf("%s %-12s %-14s %-14s %-12s", padName("NAME"), "PREFIX", "EXPIRES", "LAST USED", "CREATED"))
 	for _, tok := range tokens {
 		expires := formatDatePtr(tok.ExpiresAt, "never")
 		lastUsed := formatDatePtr(tok.LastUsedAt, "never")
 		created := formatDate(tok.CreatedAt)
-		ui.Log(fmt.Sprintf("%-20s %-12s %-14s %-14s %-12s", tok.Name, tok.Prefix, expires, lastUsed, created))
+		ui.Log(fmt.Sprintf("%s %-12s %-14s %-14s %-12s", padName(tok.Name), tok.Prefix, expires, lastUsed, created))
 	}
 	return nil
 }

@@ -746,6 +746,39 @@ func TestAPIClient_Whoami(t *testing.T) {
 	})
 }
 
+func TestAPIClient_Distributions(t *testing.T) {
+	t.Run("returns versions and default without authentication", func(t *testing.T) {
+		var method, path, authorization string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			method, path, authorization = r.Method, r.URL.Path, r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"versions": ["2025", "2024", "2023"], "default": "2025"}`))
+		}))
+		defer srv.Close()
+
+		client := cli.NewUnauthenticatedAPIClient(srv.URL)
+		result, err := client.Distributions(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "GET", method)
+		assert.Equal(t, "/api/distributions", path)
+		assert.Empty(t, authorization)
+		assert.Equal(t, cli.DistributionsResponse{Versions: []string{"2025", "2024", "2023"}, Default: "2025"}, result)
+	})
+
+	t.Run("returns an API error on a non-200 response", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not found"}`))
+		}))
+		defer srv.Close()
+
+		client := cli.NewUnauthenticatedAPIClient(srv.URL)
+		_, err := client.Distributions(t.Context())
+		require.Error(t, err)
+		assert.Equal(t, "list distributions failed (404): not found", err.Error())
+	})
+}
+
 func TestE2E_TwoClients(t *testing.T) {
 	t.Run("full build flow with API + instance mock servers", func(t *testing.T) {
 		pdfContent := []byte("%PDF-1.4 test output")

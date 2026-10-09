@@ -438,20 +438,21 @@ Hello
 func TestInitCmd(t *testing.T) {
 	t.Run("auto-discovers tex files in non-TTY mode", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
 		os.WriteFile(filepath.Join(dir, "helper.tex"), []byte(`\newcommand{\foo}{bar}`), 0o600)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, "documents:")
 		assert.Contains(t, content, `main: "paper.tex"`)
@@ -463,6 +464,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("discovers multiple tex files", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
@@ -470,7 +472,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -487,17 +489,18 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("falls back to --main when no tex files found", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, "documents:")
 		assert.Contains(t, content, `main: "main.tex"`)
@@ -507,10 +510,11 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("falls back to custom --main when no tex files found", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "thesis.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "thesis.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -524,12 +528,13 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("fails if config already exists", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("existing"), 0o600)
 
 		t.Chdir(dir)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", UI: ui}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "already exists")
@@ -537,6 +542,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("generated config is parseable", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
@@ -544,7 +550,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -553,7 +559,7 @@ func TestInitCmd(t *testing.T) {
 		require.NoError(t, err)
 		config, err := cli.ParseConfig(string(data))
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.Texlive)
+		assert.Equal(t, "2021", config.Texlive)
 		assert.Equal(t, "pdflatex", config.Compiler)
 		assert.Len(t, config.Documents, 2)
 		assert.Len(t, config.ProjectKey, 22, "tx init should generate a 22-char project_key")
@@ -571,12 +577,13 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("--compiler xelatex writes top-level compiler field", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -592,10 +599,11 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("invalid --compiler value returns error", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "badcompiler", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "badcompiler", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid compiler")
@@ -608,6 +616,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("non-TTY with empty texlive and compiler uses defaults", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, buf := testUI()
@@ -626,23 +635,24 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("explicit flags skip interactive selection", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		buf := &bytes.Buffer{}
 		ui := cli.NewUIWithOptions(buf, true, strings.NewReader(""))
-		cmd := &cli.InitCmd{Texlive: "texlive:2023", Compiler: "xelatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2023", Compiler: "xelatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2023"`)
+		assert.Contains(t, content, `texlive: "2023"`)
 		assert.Contains(t, content, `compiler: "xelatex"`)
 
 		config, err := cli.ParseConfig(content)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2023", config.Texlive)
+		assert.Equal(t, "2023", config.Texlive)
 		assert.Equal(t, "xelatex", config.Compiler)
 	})
 }
@@ -886,24 +896,39 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 
 	t.Run("TTY prompts and runs init on confirm", func(t *testing.T) {
 		dir := t.TempDir()
-		// No .tex files with \documentclass — init falls back to main.tex default.
-		// outIsTTY=true so Confirm prompt works; stdinIsTTY=false so selectors use defaults.
+		serveDistributions(t, `{"versions": ["2026", "2025"], "default": "2026"}`)
+		noCredentials(t)
 
 		buf := &bytes.Buffer{}
-		in := strings.NewReader("y\n")
-		ui := cli.NewUIWithTTYOptions(buf, true, false, in)
+		ui := cli.NewUIWithOptions(buf, true, &enterReader{first: "y\n"})
 
 		// Build will init then fail on auth — that's fine, we just check init happened.
 		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
 
 		configData, readErr := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
-		require.NoError(t, readErr)
-		assert.Contains(t, string(configData), "project_key:")
-		assert.Contains(t, string(configData), "main.tex")
+		require.NoError(t, readErr, buf.String())
+		assert.Contains(t, string(configData), "project_key:", buf.String())
+		assert.Contains(t, string(configData), `texlive: "2026"`, buf.String())
+		assert.Contains(t, string(configData), "main.tex", buf.String())
 
 		// Should fail after init (no auth configured), not on missing config.
-		require.Error(t, err)
-		assert.NotContains(t, err.Error(), "tx init")
+		require.Error(t, err, buf.String())
+		assert.NotContains(t, err.Error(), "tx init", buf.String())
+	})
+
+	t.Run("terminal stdout with piped stdin returns friendly error without prompting", func(t *testing.T) {
+		dir := t.TempDir()
+
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("y\n"))
+
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+
+		require.Error(t, err, buf.String())
+		assert.Equal(t, cli.ExitConfig, cli.AsExitError(err).Code, buf.String())
+		assert.Contains(t, err.Error(), "run `tx init` to set up your project", buf.String())
+		assert.NotContains(t, buf.String(), "[Y/n]", buf.String())
+		assert.NoFileExists(t, filepath.Join(dir, ".texops.yaml"), buf.String())
 	})
 
 	t.Run("TTY declined returns friendly error", func(t *testing.T) {
@@ -2389,13 +2414,12 @@ func TestTokenDeleteCmd(t *testing.T) {
 		mockKeyringForAuth(t, "test-jwt-token")
 		t.Setenv("TX_API_URL", srv.URL)
 
-		// Non-TTY auto-confirms
 		ui, buf := testUI()
-		cmd := &cli.TokenDeleteCmd{UI: ui}
+		cmd := &cli.TokenDeleteCmd{Yes: true, UI: ui}
 		err := cmd.Execute([]string{"CI prod"})
-		require.NoError(t, err)
+		require.NoError(t, err, buf.String())
 
-		assert.Equal(t, "tok_01ABC", deletedID)
+		assert.Equal(t, "tok_01ABC", deletedID, buf.String())
 		assert.Contains(t, buf.String(), "Token deleted")
 	})
 
@@ -2421,7 +2445,7 @@ func TestTokenDeleteCmd(t *testing.T) {
 		t.Setenv("TX_API_URL", srv.URL)
 
 		ui, _ := testUI()
-		cmd := &cli.TokenDeleteCmd{UI: ui}
+		cmd := &cli.TokenDeleteCmd{Yes: true, UI: ui}
 		err := cmd.Execute([]string{"nonexistent"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")

@@ -91,12 +91,47 @@ func TestUI_DimInfo(t *testing.T) {
 }
 
 func TestUI_Confirm_NonTTY(t *testing.T) {
-	t.Run("returns true automatically in non-TTY", func(t *testing.T) {
+	t.Run("returns a usage error without a terminal", func(t *testing.T) {
 		ui, buf := newTestUI()
 		result, err := ui.Confirm("Upload 50 MB?")
-		require.NoError(t, err)
-		assert.True(t, result)
-		// Should not print prompt in non-TTY
+		require.Error(t, err)
+		assert.False(t, result)
+		assert.Equal(t, "confirmation requires an interactive terminal", err.Error())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("returns an error when stdout is a terminal but stdin is not", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("y\n"))
+		result, err := ui.Confirm("Upload 50 MB?")
+		require.Error(t, err)
+		assert.False(t, result)
+		assert.Equal(t, "confirmation requires an interactive terminal", err.Error())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("returns an error when stdin is a terminal but stdout is not", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, false, true, strings.NewReader("y\n"))
+		result, err := ui.Confirm("Upload 50 MB?")
+		require.Error(t, err)
+		assert.False(t, result)
+		assert.Equal(t, "confirmation requires an interactive terminal", err.Error())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Empty(t, buf.String())
+	})
+
+	t.Run("returns an error in JSON mode", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithOptions(buf, true, strings.NewReader("y\n"))
+		ui.SetJSON(true)
+		result, err := ui.Confirm("Upload 50 MB?")
+		require.Error(t, err)
+		assert.False(t, result)
+		assert.Equal(t, "confirmation requires an interactive terminal", err.Error())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
 		assert.Empty(t, buf.String())
 	})
 }

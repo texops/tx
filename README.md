@@ -31,7 +31,7 @@ tx build --live                 # Watch for changes and rebuild automatically
 tx status                       # Show project status
 tx token create [--name "CI"]   # Create an API token
 tx token list                   # List API tokens
-tx token delete [name]          # Delete an API token
+tx token delete [name] [--yes]  # Delete an API token
 ```
 
 ### Getting started
@@ -45,7 +45,7 @@ tx token delete [name]          # Delete an API token
 Project settings are stored in `.texops.yaml`:
 
 - `project_key` — unique identifier (safe to commit)
-- `texlive` — TexLive version (e.g. `texlive:2025`)
+- `texlive` — TexLive version (e.g. `"2025"`)
 - `compiler` — LaTeX compiler: `pdflatex` (default), `xelatex`, `lualatex`, `latex`, `platex`, `uplatex`
 - `documents` — list of documents to build
 
@@ -59,7 +59,7 @@ Results (the build summary, `tx status` fields, token values) go to stdout; prog
 |------|---------|
 | `0` | Success |
 | `1` | Service or unexpected failure (network, server error, build timeout) |
-| `2` | Usage error (unknown or missing command, unknown flag or document, missing input without a terminal) |
+| `2` | Usage error (unknown or missing command, unknown flag or document, unsupported `--texlive` or `--compiler`, missing input or confirmation without a terminal) |
 | `3` | Not authenticated, or the session or token expired or was rejected |
 | `4` | `.texops.yaml` missing or invalid, or unsupported TeX Live version |
 | `5` | A document failed to compile |

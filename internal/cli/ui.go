@@ -254,9 +254,11 @@ func (ui *UI) Select(label string, options []string) (int, error) {
 	return -1, fmt.Errorf("no input received")
 }
 
+// Confirm asks a yes/no question. Without an interactive terminal it returns
+// an error instead of assuming an answer.
 func (ui *UI) Confirm(msg string) (bool, error) {
-	if !ui.isTTY {
-		return true, nil
+	if !ui.IsInteractive() {
+		return false, usageErrorf("confirmation requires an interactive terminal")
 	}
 
 	fmt.Fprintf(ui.out, "%s [Y/n] ", msg)
