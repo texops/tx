@@ -88,3 +88,4 @@ tx build paper
 - [Configuration](configuration.md) — customize your `.texops.yaml` and control which files are uploaded
 - [CI/CD](ci-cd.md) — set up automated builds with API tokens
 - [CLI Reference](cli.md) — full list of commands and flags
+- [Using tx from coding agents](agents.md) — let Claude Code, Codex and other agents build and fix your documents

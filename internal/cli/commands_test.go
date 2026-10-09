@@ -2452,6 +2452,32 @@ func TestTokenCreateCmd(t *testing.T) {
 		assert.Contains(t, err.Error(), "specify --name in non-interactive mode")
 	})
 
+	t.Run("stdout TTY with non-TTY stdin does not prompt for a name", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("my-ci-token\r"))
+		cmd := &cli.TokenCreateCmd{
+			ExpiresIn: "30d",
+			UI:        ui,
+		}
+		err := cmd.Execute(nil)
+		require.Error(t, err)
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Contains(t, err.Error(), "specify --name in non-interactive mode")
+	})
+
+	t.Run("stdout TTY with non-TTY stdin does not prompt for the expiry", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("\r"))
+		cmd := &cli.TokenCreateCmd{
+			Name: "ci",
+			UI:   ui,
+		}
+		err := cmd.Execute(nil)
+		require.Error(t, err)
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Contains(t, err.Error(), "specify --expires-in or --no-expiry in non-interactive mode")
+	})
+
 	t.Run("interactive name prompt via TTY", func(t *testing.T) {
 		var receivedName string
 

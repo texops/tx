@@ -41,7 +41,7 @@ func openBrowser(url string) error {
 var PollInterval = 5 * time.Second
 
 type Options struct {
-	JSON   bool      `long:"json" description:"Print one JSON document to stdout (progress goes to stderr)"`
+	JSON   bool      `long:"json" description:"Print exactly one JSON document to stdout, also on failure; progress and errors go to stderr"`
 	Login  LoginCmd  `command:"login" description:"Log in to TexOps"`
 	Init   InitCmd   `command:"init" description:"Initialize a new TexOps project"`
 	Build  BuildCmd  `command:"build" description:"Build the LaTeX project"`
@@ -56,9 +56,9 @@ type TokenCmd struct {
 }
 
 type TokenCreateCmd struct {
-	Name      string `long:"name" description:"Name for the token"`
-	ExpiresIn string `long:"expires-in" description:"Token expiry duration (e.g. 30d, 90d, 1y)"`
-	NoExpiry  bool   `long:"no-expiry" description:"Create token with no expiry"`
+	Name      string `long:"name" value-name:"name" description:"Name for the token (required without a terminal)"`
+	ExpiresIn string `long:"expires-in" value-name:"duration" description:"Expiry as a whole number of days or years, e.g. 30d, 90d, 1y (max 10y); without a terminal, this or --no-expiry is required"`
+	NoExpiry  bool   `long:"no-expiry" description:"Create a token that never expires; cannot be combined with --expires-in"`
 	UI        *UI    `no-flag:"true"`
 }
 
@@ -67,8 +67,12 @@ type TokenListCmd struct {
 }
 
 type TokenDeleteCmd struct {
-	Yes bool `short:"y" long:"yes" description:"Delete without asking for confirmation"`
+	Yes bool `short:"y" long:"yes" description:"Delete without asking for confirmation (required without a terminal or with --json)"`
 	UI  *UI  `no-flag:"true"`
+}
+
+func (cmd *TokenDeleteCmd) Usage() string {
+	return "[delete-OPTIONS] [name]"
 }
 
 type StatusCmd struct {
@@ -77,23 +81,25 @@ type StatusCmd struct {
 
 type LoginCmd struct {
 	NoBrowser bool          `long:"no-browser" description:"Print the login URL and code without opening a browser"`
-	Timeout   time.Duration `long:"timeout" description:"How long to wait for authorization, as a Go duration (e.g. 2m); defaults to the login code's lifetime"`
+	Timeout   time.Duration `long:"timeout" value-name:"duration" description:"How long to wait for the login to be approved, as a Go duration such as 2m or 90s (default: the login code's lifetime)"`
 	UI        *UI           `no-flag:"true"`
 }
 
 type InitCmd struct {
-	Texlive  string `long:"texlive" description:"TexLive distribution version"`
-	Compiler string `long:"compiler" description:"LaTeX compiler" choice:"pdflatex" choice:"xelatex" choice:"lualatex" choice:"latex" choice:"platex" choice:"uplatex"`
-	Main     string `long:"main" default:"main.tex" description:"Main TeX file (fallback when no .tex files discovered)"`
+	Texlive  string `long:"texlive" value-name:"version" description:"TeX Live version"`
+	Compiler string `long:"compiler" value-name:"name" description:"LaTeX compiler (default: pdflatex)" choice:"pdflatex" choice:"xelatex" choice:"lualatex" choice:"latex" choice:"platex" choice:"uplatex"`
+	Main     string `long:"main" value-name:"file" default:"main.tex" description:"Main .tex file, used only when no .tex file with \\documentclass is found"`
 	UI       *UI    `no-flag:"true"`
 }
 
 type BuildCmd struct {
-	Args    struct{ Names []string } `positional-args:"true"`
-	NoCache bool                     `long:"no-cache" description:"Clear build cache and rebuild from scratch"`
-	Live    bool                     `long:"live" description:"Watch for changes and rebuild automatically"`
-	Log     string                   `long:"log" choice:"stdout" choice:"file" description:"Where the LaTeX log goes: stdout streams it, file saves it to .texops/logs/<doc>.log (default: file under a coding agent or with --json, otherwise stdout)"`
-	UI      *UI                      `no-flag:"true"`
+	Args struct {
+		Names []string `positional-arg-name:"name" description:"Documents to build, by their name in .texops.yaml (default: all)"`
+	} `positional-args:"true"`
+	NoCache bool   `long:"no-cache" description:"Clear the remote build cache and rebuild from scratch"`
+	Live    bool   `long:"live" description:"Watch for changes and rebuild until interrupted with Ctrl+C; for people, not for scripts or agents; cannot be combined with --json"`
+	Log     string `long:"log" choice:"stdout" choice:"file" description:"Where the LaTeX log goes: stdout streams it, file saves it to .texops/logs/<doc>.log (default: file under a coding agent or with --json, otherwise stdout)"`
+	UI      *UI    `no-flag:"true"`
 }
 
 var NewInstanceClientFn = func(instanceURL, jwt string) *InstanceClient {
@@ -1082,7 +1088,7 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 	// Determine name
 	cmd.Name = strings.TrimSpace(cmd.Name)
 	if cmd.Name == "" {
-		if !ui.IsTTY() {
+		if !ui.IsInteractive() {
 			return usageErrorf("specify --name in non-interactive mode")
 		}
 		name, err := ui.TextInput("Token name:")
@@ -1106,7 +1112,7 @@ func (cmd *TokenCreateCmd) Execute(args []string) error {
 		}
 		expiresIn = &seconds
 	} else {
-		if !ui.IsTTY() {
+		if !ui.IsInteractive() {
 			return usageErrorf("specify --expires-in or --no-expiry in non-interactive mode")
 		}
 		// Interactive selection

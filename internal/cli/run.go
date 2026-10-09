@@ -31,6 +31,7 @@ func Run(version string, args []string, stdin io.Reader, stdout, stderr io.Write
 
 	parser := flags.NewParser(&opts, flags.HelpFlag|flags.PassDoubleDash)
 	parser.Name = "tx"
+	setupHelp(parser)
 	parser.CommandHandler = func(command flags.Commander, args []string) error {
 		ui.SetJSON(opts.JSON)
 		if command == nil {
@@ -47,13 +48,13 @@ func Run(version string, args []string, stdin io.Reader, stdout, stderr io.Write
 	if flagsErr, ok := errors.AsType[*flags.Error](err); ok {
 		switch {
 		case errors.Is(flagsErr.Type, flags.ErrHelp):
-			fmt.Fprintln(stdout, flagsErr.Message)
+			writeHelp(parser, stdout)
 			return ExitOK
 		case errors.Is(flagsErr.Type, flags.ErrCommandRequired) && len(args) == 0:
-			parser.WriteHelp(stdout)
+			writeHelp(parser, stdout)
 			return ExitOK
 		case errors.Is(flagsErr.Type, flags.ErrCommandRequired):
-			parser.WriteHelp(stderr)
+			writeHelp(parser, stderr)
 		}
 		err = usageError(err)
 	}

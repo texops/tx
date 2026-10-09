@@ -18,6 +18,7 @@
 .Cm build
 .Op Fl -live
 .Op Fl -no-cache
+.Op Fl -log Ns = Ns Cm stdout | file
 .Op Ar name ...
 .Nm
 .Cm status
@@ -43,7 +44,37 @@ documents.
 It uploads project files, triggers remote builds, and downloads the resulting
 PDFs.
 Both interactive use on a developer workstation and headless use in CI
-pipelines are supported.
+pipelines and coding agents are supported.
+.Pp
+.Nm
+never prompts unless both stdin and stdout are a TTY.
+Without a terminal it uses a default, or fails when there is no safe
+default: usually with exit 2 for missing input, or 4 for
+.Nm Cm build
+without
+.Pa .texops.yaml .
+The one exception is the selection list of
+.Nm Cm token delete Fl -yes
+without a name, which needs only stdout to be a TTY.
+.Nm Fl -help
+gives an overview, and
+.Nm Ar command Fl -help
+describes a command with examples.
+.Sh OPTIONS
+These options work with every command, before or after the command name.
+.Bl -tag -width Ds
+.It Fl -json
+Print exactly one JSON document to standard output, also on failure, and
+nothing else.
+Progress, the build log and error messages go to standard error as plain
+lines.
+See
+.Sx JSON OUTPUT .
+.It Fl h , Fl -help
+Show help for
+.Nm
+or for the command and exit 0.
+.El
 .Sh GETTING STARTED
 .Bl -enum
 .It
@@ -77,6 +108,10 @@ to stderr, then opens the URL in a browser when possible, with the code
 already filled in.
 After authorization completes in the browser, the session JWT is
 stored locally.
+A person has to approve the login, so CI pipelines and coding agents should
+set
+.Ev TX_API_TOKEN
+instead.
 .Bl -tag -width Ds
 .It Fl -no-browser
 Print the URL and code without opening a browser.
@@ -151,6 +186,23 @@ Otherwise the build fails with exit status 4.
 .Pp
 Flags:
 .Bl -tag -width Ds
+.It Fl -log Ns = Ns Cm stdout | file
+Where the LaTeX log goes.
+.Cm stdout
+streams it to standard error while the document compiles and saves nothing.
+.Cm file
+streams nothing and saves the full log to
+.Pa .texops/logs/<doc>.log
+after each build; a failed build also prints the last 20 lines of the log.
+Defaults to
+.Cm file
+under a coding agent
+.Pq see Ev TX_AGENT
+or with
+.Fl -json ,
+and to
+.Cm stdout
+otherwise.
 .It Fl -live
 Watch for file changes and rebuild automatically.
 After the initial build, the command monitors the project directory for
@@ -159,9 +211,32 @@ Rapid successive saves are coalesced into a single rebuild.
 Output PDFs are rewritten in place (preserving the file inode) so that PDF
 viewers such as Preview.app and Skim auto-refresh without reopening the file.
 Press Ctrl+C to stop watching and exit.
+Because it runs until interrupted,
+.Fl -live
+is meant for people, not for scripts or coding agents.
+It cannot be combined with
+.Fl -json
+.Pq exit 2 .
 .It Fl -no-cache
 Rebuild without using the remote build cache.
 .El
+.Pp
+At the end of every build,
+.Nm
+prints a block per document with the errors and warnings the service found,
+one per line as
+.Ql file:line: severity: message ,
+for example:
+.Bd -literal -offset indent
+paper: FAILED, 1 error, 1 warning (log: .texops/logs/paper.log)
+  sec/intro.tex:3: error: Undefined control sequence.
+  sec/intro.tex:1: warning: Citation `missing' undefined
+.Ed
+.Pp
+File paths are relative to the project root.
+Parts the service could not determine are left out, and the log part
+appears only when the log was saved.
+Successful documents list their warnings too.
 .Ss status
 Show authentication status including email
 .Pq when available ,
@@ -234,6 +309,170 @@ Print the
 version and exit.
 The same output is available via
 .Nm Fl -version .
+.Sh JSON OUTPUT
+With
+.Fl -json ,
+standard output carries exactly one JSON document followed by a newline,
+whatever the outcome; the exit status is the same as without it.
+When a command fails before it has a result, the document is an error:
+.Bd -literal -offset indent
+{"error": {"code": "usage", "message": "..."}}
+.Ed
+.Pp
+.Ql code
+is one of
+.Ql internal ,
+.Ql network ,
+.Ql timeout ,
+.Ql usage ,
+.Ql not_authenticated ,
+.Ql config
+or
+.Ql build_failed
+.Pq see Sx EXIT STATUS ;
+.Ql message
+is the message printed to standard error.
+.Pp
+A build that ran prints a build document, also when documents failed:
+.Bd -literal -offset indent
+{
+  "ok": false,
+  "duration_ms": 4210,
+  "documents": [{
+    "name": "paper", "main": "paper.tex",
+    "status": "failed", "reason": "latex_error",
+    "output": null, "log": ".texops/logs/paper.log",
+    "build_id": "bld_8f3k2", "duration_ms": 3120,
+    "errors": [{"severity": "error", "file": "sec/intro.tex",
+                "line": 3, "message": "Undefined control sequence.",
+                "context": "\e\ebadmacro"}],
+    "warnings": [],
+    "truncated": false
+  }]
+}
+.Ed
+.Bl -tag -width Ds
+.It Cm ok
+True when every document built.
+.It Cm status
+.Ql succeeded
+or
+.Ql failed .
+.It Cm reason
+Why the document failed, null on success:
+.Ql latex_error
+or
+.Ql no_pdf
+.Pq the document did not compile ,
+.Ql timeout ,
+.Ql internal ,
+.Ql network ,
+.Ql auth ,
+.Ql sync
+or
+.Ql config .
+.It Cm output
+PDF path relative to the project root, null on failure.
+.It Cm log
+Path of the saved log, or null.
+.It Cm errors , warnings
+Diagnostics with
+.Cm severity ,
+.Cm message
+and, when known,
+.Cm file , line ,
+.Cm kind
+.Po
+warnings:
+.Ql undefined_citation ,
+.Ql undefined_reference ,
+.Ql duplicate_label ,
+.Ql rerun
+.Pc
+and
+.Cm context
+.Pq errors: the source text TeX showed .
+.It Cm truncated
+True when the service found more than 50 diagnostics.
+.El
+.Pp
+The other commands print:
+.Bl -tag -width Ds
+.It Cm status
+.Cm authenticated ,
+.Cm email ,
+.Cm method
+.Po
+.Ql jwt
+or
+.Ql api_token
+.Pc ,
+.Cm source
+.Po
+.Ql env ,
+.Ql file
+or
+.Ql keyring
+.Pc
+and
+.Cm expires_at
+.Pq RFC 3339 or null .
+When not authenticated, only
+.Cm authenticated
+is printed, as false, and the exit status is 3.
+.It Cm init
+.Cm config ,
+.Cm texlive ,
+.Cm compiler
+and
+.Cm documents
+.Po
+each with
+.Cm name , main
+and, when set,
+.Cm directory
+.Pc .
+.It Cm login
+.Cm authenticated .
+.It Cm token list
+An array of objects with
+.Cm name , prefix , expires_at , last_used_at
+and
+.Cm created_at
+.Pq RFC 3339 or null .
+.It Cm token create
+.Cm name , token
+and
+.Cm expires_at .
+.It Cm token delete
+.Cm deleted ,
+the name of the deleted token.
+.El
+.Sh CODING AGENTS
+Coding agents should authenticate with
+.Ev TX_API_TOKEN ,
+or ask the user to run
+.Cm tx login
+in a terminal, and then loop:
+run
+.Cm tx build --json ,
+read the
+.Cm errors
+of each failed document, fix the sources and build again.
+Exit status 5 means LaTeX errors; 1 is a service failure that editing
+the sources will not fix.
+Agents should not use
+.Fl -live ,
+and should delete tokens only with
+.Fl -yes
+when asked to.
+.Pp
+.Nm
+detects a coding agent from the environment
+.Pq see Sx ENVIRONMENT
+and then saves build logs to
+.Pa .texops/logs/
+instead of streaming them.
 .Sh CONFIGURATION
 The project configuration file
 .Pa .texops.yaml
@@ -397,6 +636,7 @@ and set it as
 .Bl -bullet
 .It
 .Pa .git/ ,
+.Pa .texops/ ,
 .Pa .texops.yaml ,
 and
 .Pa .txignore
@@ -428,6 +668,20 @@ Override the API endpoint URL.
 Takes priority over the
 .Cm api_url
 configuration key.
+.It Ev TX_AGENT
+Set to
+.Ql none
+to turn off coding agent detection.
+.It Ev AI_AGENT , CLAUDECODE , CODEX_THREAD_ID , CURSOR_AGENT , GEMINI_CLI
+Set by coding agents.
+When one is present and
+.Ev TX_AGENT
+is not
+.Ql none ,
+.Cm build
+defaults to
+.Fl -log Ns = Ns Cm file ,
+and requests name the agent in the User-Agent header.
 .It Ev XDG_CONFIG_HOME
 When set to an absolute path, the credentials file is stored at
 .Pa $XDG_CONFIG_HOME/texops/credentials.yaml .
@@ -441,6 +695,14 @@ Project configuration file in the current directory.
 File exclusion patterns, similar to
 .Pa .gitignore .
 Can appear in any project subdirectory.
+.It Pa .texops/logs/<doc>.log
+Full LaTeX log of the last build of a document, saved with
+.Fl -log Ns = Ns Cm file .
+.It Pa .texops/.gitignore
+Created with the first saved log; contains
+.Ql *
+so that Git ignores
+.Pa .texops/ .
 .It Pa $XDG_CONFIG_HOME/texops/credentials.yaml
 Credentials file when
 .Ev XDG_CONFIG_HOME
@@ -458,31 +720,48 @@ table and the token printed by
 are written to standard output.
 Progress, the streamed build log and error messages are written to standard
 error; each error is printed once.
+With
+.Fl -json ,
+standard output carries only the JSON document, whose
+.Ql error.code
+for each status is given in parentheses.
 .Bl -tag -width Ds
 .It 0
 Success, including help and version output.
 .It 1
 Service or unexpected failure: network errors, server errors, sync or upload
-failures, or a build that hit the time limit or failed inside the service.
+failures, or a build that hit the time limit or failed inside the service
+.Po
+.Ql internal ,
+.Ql network ,
+.Ql timeout
+.Pc .
 .It 2
 Usage error: unknown command, missing subcommand or unknown flag, bad flag
 value
 .Pq including an unsupported Fl -texlive No or Fl -compiler ,
 unknown document name,
+.Fl -json
+with
+.Fl -live ,
 missing required input when there is no terminal to prompt on,
 or
 .Cm token delete
 without
 .Fl -yes
-when there is no terminal to confirm on.
+when there is no terminal to confirm on
+.Pq Ql usage .
 .It 3
-Not authenticated, or the session or API token has expired or was rejected.
+Not authenticated, or the session or API token has expired or was rejected
+.Pq Ql not_authenticated .
 .It 4
 Project configuration error:
 .Pa .texops.yaml
-is missing or invalid, or its TeX Live version is not supported.
+is missing or invalid, or its TeX Live version is not supported
+.Pq Ql config .
 .It 5
-A document failed to compile (LaTeX errors, or no PDF was produced).
+A document failed to compile: LaTeX errors, or no PDF was produced
+.Pq Ql build_failed .
 .El
 .Pp
 When several documents fail for different reasons,
@@ -494,6 +773,10 @@ It exits 5 only when every failure is a compile failure.
 Build a specific document:
 .Pp
 .Dl $ tx build paper
+.Pp
+Build every document and print the result as JSON:
+.Pp
+.Dl $ tx build --json
 .Pp
 Watch for changes and rebuild automatically:
 .Pp

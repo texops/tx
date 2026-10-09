@@ -24,14 +24,17 @@ go install github.com/texops/tx/cmd/tx@latest
 
 ```
 tx login [--no-browser] [--timeout <d>]  # Authenticate with TexOps
-tx init                                  # Initialize a project in the current directory
+tx init [--texlive <v>] [--compiler <c>] # Initialize a project in the current directory
 tx build                                 # Build all documents
 tx build <name>                          # Build a specific document
-tx build --live                          # Watch for changes and rebuild automatically
-tx status                                # Show project status
+tx build --log=file                      # Save the LaTeX log to .texops/logs/ instead of streaming it
+tx build --live                          # Watch for changes and rebuild (until Ctrl+C)
+tx status                                # Show authentication status
 tx token create [--name "CI"]            # Create an API token
 tx token list                            # List API tokens
 tx token delete [name] [--yes]           # Delete an API token
+tx <command> --json                      # Print one JSON document to stdout
+tx <command> --help                      # Describe a command, with examples
 ```
 
 ### Getting started
@@ -51,6 +54,10 @@ Project settings are stored in `.texops.yaml`:
 
 The API URL defaults to `https://api.texops.dev` and can be overridden with `TX_API_URL` or `api_url` in `.texops.yaml`.
 
+### Scripts and coding agents
+
+`tx` never prompts without a terminal: it uses a default or fails with a non-zero exit code. With `--json`, stdout carries exactly one JSON document, also on failure. Authenticate with `TX_API_TOKEN` (create one with `tx token create`). Under a coding agent (detected from `AI_AGENT`, `CLAUDECODE`, `CODEX_THREAD_ID`, `CURSOR_AGENT` or `GEMINI_CLI`; turn off with `TX_AGENT=none`), `tx build` saves the LaTeX log to `.texops/logs/<doc>.log` instead of streaming it. See [Using tx from coding agents](https://texops.dev/docs/agents) and the [CLI reference](https://texops.dev/docs/cli).
+
 ### Output and exit codes
 
 Results (the build summary, `tx status` fields, token values) go to stdout; progress, the build log and errors go to stderr.
@@ -59,7 +66,7 @@ Results (the build summary, `tx status` fields, token values) go to stdout; prog
 |------|---------|
 | `0` | Success |
 | `1` | Service or unexpected failure (network, server error, build timeout) |
-| `2` | Usage error (unknown or missing command, unknown flag or document, unsupported `--texlive` or `--compiler`, missing input or confirmation without a terminal) |
+| `2` | Usage error (unknown or missing command, unknown flag or document, unsupported `--texlive` or `--compiler`, `--json` with `--live`, missing input or confirmation without a terminal) |
 | `3` | Not authenticated, or the session or token expired or was rejected |
 | `4` | `.texops.yaml` missing or invalid, or unsupported TeX Live version |
 | `5` | A document failed to compile |

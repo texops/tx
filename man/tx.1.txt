@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
      tx login [--no-browser] [--timeout duration]
      tx init [--texlive version] [--compiler name] [--main file]
-     tx build [--live] [--no-cache] [name ...]
+     tx build [--live] [--no-cache] [--log=stdout | file] [name ...]
      tx status
      tx token create [--name name] [--expires-in duration] [--no-expiry]
      tx token list
@@ -18,7 +18,26 @@ DESCRIPTION
      tx is the command-line client for TexOps, a cloud service that compiles
      LaTeX documents.  It uploads project files, triggers remote builds, and
      downloads the resulting PDFs.  Both interactive use on a developer
-     workstation and headless use in CI pipelines are supported.
+     workstation and headless use in CI pipelines and coding agents are
+     supported.
+
+     tx never prompts unless both stdin and stdout are a TTY.  Without a
+     terminal it uses a default, or fails when there is no safe default:
+     usually with exit 2 for missing input, or 4 for tx build without
+     .texops.yaml.  The one exception is the selection list of tx token delete
+     --yes without a name, which needs only stdout to be a TTY.  tx --help
+     gives an overview, and tx command --help describes a command with
+     examples.
+
+OPTIONS
+     These options work with every command, before or after the command name.
+
+     --json  Print exactly one JSON document to standard output, also on
+             failure, and nothing else.  Progress, the build log and error
+             messages go to standard error as plain lines.  See JSON OUTPUT.
+
+     -h, --help
+             Show help for tx or for the command and exit 0.
 
 GETTING STARTED
      1.   Authenticate with the TexOps service:
@@ -43,7 +62,8 @@ COMMANDS
      ‘Open <verification URL> and enter code <CODE>’ to stderr, then opens the
      URL in a browser when possible, with the code already filled in.  After
      authorization completes in the browser, the session JWT is stored
-     locally.
+     locally.  A person has to approve the login, so CI pipelines and coding
+     agents should set TX_API_TOKEN instead.
 
      --no-browser
              Print the URL and code without opening a browser.
@@ -99,6 +119,14 @@ COMMANDS
 
      Flags:
 
+     --log=stdout | file
+             Where the LaTeX log goes.  stdout streams it to standard error
+             while the document compiles and saves nothing.  file streams
+             nothing and saves the full log to .texops/logs/<doc>.log after
+             each build; a failed build also prints the last 20 lines of the
+             log.  Defaults to file under a coding agent (see TX_AGENT) or
+             with --json, and to stdout otherwise.
+
      --live  Watch for file changes and rebuild automatically.  After the
              initial build, the command monitors the project directory for
              modifications and triggers a rebuild approximately 500ms after
@@ -106,10 +134,24 @@ COMMANDS
              single rebuild.  Output PDFs are rewritten in place (preserving
              the file inode) so that PDF viewers such as Preview.app and Skim
              auto-refresh without reopening the file.  Press Ctrl+C to stop
-             watching and exit.
+             watching and exit.  Because it runs until interrupted, --live is
+             meant for people, not for scripts or coding agents.  It cannot be
+             combined with --json (exit 2).
 
      --no-cache
              Rebuild without using the remote build cache.
+
+     At the end of every build, tx prints a block per document with the errors
+     and warnings the service found, one per line as ‘file:line: severity:
+     message’, for example:
+
+           paper: FAILED, 1 error, 1 warning (log: .texops/logs/paper.log)
+             sec/intro.tex:3: error: Undefined control sequence.
+             sec/intro.tex:1: warning: Citation `missing' undefined
+
+     File paths are relative to the project root.  Parts the service could not
+     determine are left out, and the log part appears only when the log was
+     saved.  Successful documents list their warnings too.
 
    status
      Show authentication status including email (when available),
@@ -159,6 +201,90 @@ COMMANDS
    version
      Print the tx version and exit.  The same output is available via tx
      --version.
+
+JSON OUTPUT
+     With --json, standard output carries exactly one JSON document followed
+     by a newline, whatever the outcome; the exit status is the same as
+     without it.  When a command fails before it has a result, the document is
+     an error:
+
+           {"error": {"code": "usage", "message": "..."}}
+
+     ‘code’ is one of ‘internal’, ‘network’, ‘timeout’, ‘usage’,
+     ‘not_authenticated’, ‘config’ or ‘build_failed’ (see EXIT STATUS);
+     ‘message’ is the message printed to standard error.
+
+     A build that ran prints a build document, also when documents failed:
+
+           {
+             "ok": false,
+             "duration_ms": 4210,
+             "documents": [{
+               "name": "paper", "main": "paper.tex",
+               "status": "failed", "reason": "latex_error",
+               "output": null, "log": ".texops/logs/paper.log",
+               "build_id": "bld_8f3k2", "duration_ms": 3120,
+               "errors": [{"severity": "error", "file": "sec/intro.tex",
+                           "line": 3, "message": "Undefined control sequence.",
+                           "context": "\\badmacro"}],
+               "warnings": [],
+               "truncated": false
+             }]
+           }
+
+     ok      True when every document built.
+
+     status  ‘succeeded’ or ‘failed’.
+
+     reason  Why the document failed, null on success: ‘latex_error’ or
+             ‘no_pdf’ (the document did not compile), ‘timeout’, ‘internal’,
+             ‘network’, ‘auth’, ‘sync’ or ‘config’.
+
+     output  PDF path relative to the project root, null on failure.
+
+     log     Path of the saved log, or null.
+
+     errors, warnings
+             Diagnostics with severity, message and, when known, file, line,
+             kind (warnings: ‘undefined_citation’, ‘undefined_reference’,
+             ‘duplicate_label’, ‘rerun’) and context (errors: the source text
+             TeX showed).
+
+     truncated
+             True when the service found more than 50 diagnostics.
+
+     The other commands print:
+
+     status  authenticated, email, method (‘jwt’ or ‘api_token’), source
+             (‘env’, ‘file’ or ‘keyring’) and expires_at (RFC 3339 or null).
+             When not authenticated, only authenticated is printed, as false,
+             and the exit status is 3.
+
+     init    config, texlive, compiler and documents (each with name, main
+             and, when set, directory).
+
+     login   authenticated.
+
+     token list
+             An array of objects with name, prefix, expires_at, last_used_at
+             and created_at (RFC 3339 or null).
+
+     token create
+             name, token and expires_at.
+
+     token delete
+             deleted, the name of the deleted token.
+
+CODING AGENTS
+     Coding agents should authenticate with TX_API_TOKEN, or ask the user to
+     run tx login in a terminal, and then loop: run tx build --json, read the
+     errors of each failed document, fix the sources and build again.  Exit
+     status 5 means LaTeX errors; 1 is a service failure that editing the
+     sources will not fix.  Agents should not use --live, and should delete
+     tokens only with --yes when asked to.
+
+     tx detects a coding agent from the environment (see ENVIRONMENT) and then
+     saves build logs to .texops/logs/ instead of streaming them.
 
 CONFIGURATION
      The project configuration file .texops.yaml is created by tx init with a
@@ -259,7 +385,8 @@ AUTHENTICATION
      TX_API_TOKEN.
 
 FILE UPLOADS
-     •   .git/, .texops.yaml, and .txignore are always excluded from uploads.
+     •   .git/, .texops/, .texops.yaml, and .txignore are always excluded from
+         uploads.
 
      •   Only the project-root .gitignore is loaded; nested .gitignore files
          are not used.
@@ -282,6 +409,14 @@ ENVIRONMENT
              Override the API endpoint URL.  Takes priority over the api_url
              configuration key.
 
+     TX_AGENT
+             Set to ‘none’ to turn off coding agent detection.
+
+     AI_AGENT, CLAUDECODE, CODEX_THREAD_ID, CURSOR_AGENT, GEMINI_CLI
+             Set by coding agents.  When one is present and TX_AGENT is not
+             ‘none’, build defaults to --log=file, and requests name the agent
+             in the User-Agent header.
+
      XDG_CONFIG_HOME
              When set to an absolute path, the credentials file is stored at
              $XDG_CONFIG_HOME/texops/credentials.yaml.  Relative values are
@@ -295,6 +430,14 @@ FILES
              File exclusion patterns, similar to .gitignore.  Can appear in
              any project subdirectory.
 
+     .texops/logs/<doc>.log
+             Full LaTeX log of the last build of a document, saved with
+             --log=file.
+
+     .texops/.gitignore
+             Created with the first saved log; contains ‘*’ so that Git
+             ignores .texops/.
+
      $XDG_CONFIG_HOME/texops/credentials.yaml
              Credentials file when XDG_CONFIG_HOME is set to an absolute path.
 
@@ -305,28 +448,31 @@ EXIT STATUS
      Results (the build summary, status fields, the token list table and the
      token printed by token create) are written to standard output.  Progress,
      the streamed build log and error messages are written to standard error;
-     each error is printed once.
+     each error is printed once.  With --json, standard output carries only
+     the JSON document, whose ‘error.code’ for each status is given in
+     parentheses.
 
      0       Success, including help and version output.
 
      1       Service or unexpected failure: network errors, server errors,
              sync or upload failures, or a build that hit the time limit or
-             failed inside the service.
+             failed inside the service (‘internal’, ‘network’, ‘timeout’).
 
      2       Usage error: unknown command, missing subcommand or unknown flag,
              bad flag value (including an unsupported --texlive or
-             --compiler), unknown document name, missing required input when
-             there is no terminal to prompt on, or token delete without --yes
-             when there is no terminal to confirm on.
+             --compiler), unknown document name, --json with --live, missing
+             required input when there is no terminal to prompt on, or token
+             delete without --yes when there is no terminal to confirm on
+             (‘usage’).
 
      3       Not authenticated, or the session or API token has expired or was
-             rejected.
+             rejected (‘not_authenticated’).
 
      4       Project configuration error: .texops.yaml is missing or invalid,
-             or its TeX Live version is not supported.
+             or its TeX Live version is not supported (‘config’).
 
-     5       A document failed to compile (LaTeX errors, or no PDF was
-             produced).
+     5       A document failed to compile: LaTeX errors, or no PDF was
+             produced (‘build_failed’).
 
      When several documents fail for different reasons, build exits with the
      most severe code: 1 if any failure was a service failure, otherwise 3 for
@@ -337,6 +483,10 @@ EXAMPLES
      Build a specific document:
 
            $ tx build paper
+
+     Build every document and print the result as JSON:
+
+           $ tx build --json
 
      Watch for changes and rebuild automatically:
 
