@@ -837,6 +837,9 @@ func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error
 	return ParseSSEEvents(reader, onLog, onLog)
 }
 
+// A done event carries the build's diagnostics on one data line.
+const maxSSELineBytes = 8 << 20
+
 func ParseSSEEvents(reader io.Reader, onLog, onQueued func(string)) (BuildDoneEvent, error) {
 	result := BuildDoneEvent{
 		Status:  "error",
@@ -844,6 +847,7 @@ func ParseSSEEvents(reader io.Reader, onLog, onQueued func(string)) (BuildDoneEv
 	}
 
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64<<10), maxSSELineBytes)
 	var eventType, eventData string
 
 	for scanner.Scan() {

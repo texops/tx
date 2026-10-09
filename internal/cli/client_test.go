@@ -567,6 +567,16 @@ func TestParseSSEStream(t *testing.T) {
 		assert.Equal(t, cli.BuildDoneEvent{Status: "error", Message: "build failed with exit code 12", BuildID: "bld_1"}, result, input)
 	})
 
+	t.Run("done event longer than 64KB", func(t *testing.T) {
+		message := strings.Repeat("x", 100<<10)
+		input := "event: done\ndata: {\"status\":\"success\",\"message\":\"" + message + "\"}\n\n"
+
+		result, err := cli.ParseSSEStream(strings.NewReader(input), nil)
+
+		require.NoError(t, err)
+		assert.Equal(t, cli.BuildDoneEvent{Status: "success", Message: message}, result)
+	})
+
 	t.Run("handles queued event", func(t *testing.T) {
 		input := "event: queued\ndata: {\"message\":\"build queued, waiting for previous build to finish\"}\n\nevent: log\ndata: {\"message\":\"Starting build\"}\n\nevent: done\ndata: {\"status\":\"success\"}\n\n"
 		reader := strings.NewReader(input)
