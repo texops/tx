@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,58 @@ func mockKeyringForAuth(t *testing.T, token string) {
 		return "", fmt.Errorf("not found")
 	}
 	t.Cleanup(func() { cli.KeyringGet = origGet })
+}
+
+// stubLogin replaces the browser, keyring and poll interval for login tests
+// and returns the URLs the browser was asked to open.
+func stubLogin(t *testing.T) *[]string {
+	t.Helper()
+	var opened []string
+	origBrowser := cli.OpenBrowser
+	cli.OpenBrowser = func(url string) error {
+		opened = append(opened, url)
+		return nil
+	}
+	t.Cleanup(func() { cli.OpenBrowser = origBrowser })
+	origSet := cli.KeyringSet
+	cli.KeyringSet = func(service, user, key string) error { return nil }
+	t.Cleanup(func() { cli.KeyringSet = origSet })
+	origInterval := cli.PollInterval
+	cli.PollInterval = time.Millisecond
+	t.Cleanup(func() { cli.PollInterval = origInterval })
+	return &opened
+}
+
+// loginServer serves the device code flow with a code valid for expiresIn
+// seconds; token polls succeed when authorized and stay pending otherwise.
+func loginServer(t *testing.T, expiresIn int, authorized bool) *httptest.Server {
+	t.Helper()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/auth/device-code":
+			json.NewEncoder(w).Encode(map[string]any{
+				"device_code":      "dc_wxyz",
+				"user_code":        "WXYZ-1234",
+				"verification_url": srv.URL + "/verify?code=WXYZ-1234",
+				"expires_in":       expiresIn,
+				"interval":         1,
+			})
+		case "/auth/token":
+			if !authorized {
+				w.WriteHeader(http.StatusPreconditionRequired)
+				json.NewEncoder(w).Encode(map[string]string{"error": "authorization_pending"})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"jwt": "header.payload.sig", "expires_at": "2027-01-01T00:00:00Z"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("TX_API_URL", srv.URL)
+	return srv
 }
 
 func TestLoginCmd(t *testing.T) {
@@ -148,11 +201,147 @@ func TestLoginCmd(t *testing.T) {
 
 		t.Setenv("TX_API_URL", srv.URL)
 
-		ui, _ := testUI()
+		ui, buf := testUI()
 		cmd := &cli.LoginCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expired")
+		require.Error(t, err, buf.String())
+		assert.Equal(t, "login code expired; run 'tx login' again", err.Error(), buf.String())
+		assert.Equal(t, cli.ExitFailure, cli.AsExitError(err).Code, buf.String())
+		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, buf.String())
+		assert.Contains(t, buf.String(), "Login code expired\n")
+	})
+
+	t.Run("prints the URL and code before opening the browser", func(t *testing.T) {
+		stubLogin(t)
+		srv := loginServer(t, 900, true)
+		ui, buf := testUI()
+		var outputAtOpen string
+		cli.OpenBrowser = func(url string) error {
+			outputAtOpen = buf.String()
+			return nil
+		}
+
+		err := (&cli.LoginCmd{UI: ui}).Execute(nil)
+
+		require.NoError(t, err, buf.String())
+		assert.Equal(t, "Requesting login code...\nLogin code received\nOpen "+srv.URL+"/verify?code=WXYZ-1234 and enter code WXYZ-1234\n", outputAtOpen, buf.String())
+	})
+
+	t.Run("--no-browser prints the URL and code without opening the browser", func(t *testing.T) {
+		opened := stubLogin(t)
+		srv := loginServer(t, 900, true)
+		ui, buf := testUI()
+
+		err := (&cli.LoginCmd{UI: ui, NoBrowser: true}).Execute(nil)
+
+		require.NoError(t, err, buf.String())
+		assert.Empty(t, *opened, buf.String())
+		assert.Equal(t,
+			"Requesting login code...\nLogin code received\n"+
+				"Open "+srv.URL+"/verify?code=WXYZ-1234 and enter code WXYZ-1234\n"+
+				"Waiting for authorization...\nAuthorized\nLogged in successfully\n",
+			buf.String())
+	})
+
+	t.Run("browser failure keeps the printed URL and code", func(t *testing.T) {
+		stubLogin(t)
+		srv := loginServer(t, 900, true)
+		cli.OpenBrowser = func(string) error { return errors.New("no display") }
+		ui, buf := testUI()
+
+		err := (&cli.LoginCmd{UI: ui}).Execute(nil)
+
+		require.NoError(t, err, buf.String())
+		assert.Contains(t, buf.String(), "Open "+srv.URL+"/verify?code=WXYZ-1234 and enter code WXYZ-1234\nCould not open a browser automatically\n")
+	})
+
+	t.Run("--timeout stops waiting before the code expires", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 900, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: 50 * time.Millisecond}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Less(t, time.Since(start), 5*time.Second, buf.String())
+		assert.Equal(t, "timed out after 50ms waiting for authorization; run 'tx login' again", err.Error(), buf.String())
+		assert.Equal(t, cli.ExitFailure, cli.AsExitError(err).Code, buf.String())
+		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, buf.String())
+		assert.True(t, strings.HasSuffix(buf.String(), "Waiting for authorization...\nTimed out waiting for authorization\n"), buf.String())
+	})
+
+	t.Run("waits for the code lifetime by default", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 1, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.GreaterOrEqual(t, time.Since(start), time.Second, buf.String())
+		assert.Equal(t, "login code expired; run 'tx login' again", err.Error(), buf.String())
+		assert.Equal(t, cli.KindTimeout, cli.AsExitError(err).Kind, buf.String())
+		assert.True(t, strings.HasSuffix(buf.String(), "Waiting for authorization...\nLogin code expired\n"), buf.String())
+	})
+
+	t.Run("--timeout longer than the code lifetime ends when the code expires", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 1, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: time.Hour}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Less(t, time.Since(start), 5*time.Second, buf.String())
+		assert.Equal(t, "login code expired; run 'tx login' again", err.Error(), buf.String())
+	})
+
+	t.Run("--timeout is honoured when the server sends no code lifetime", func(t *testing.T) {
+		stubLogin(t)
+		loginServer(t, 0, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: 200 * time.Millisecond}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.GreaterOrEqual(t, time.Since(start), 200*time.Millisecond, buf.String())
+		assert.Equal(t, "timed out after 200ms waiting for authorization; run 'tx login' again", err.Error(), buf.String())
+	})
+
+	t.Run("--timeout shorter than the poll interval cuts the sleep short", func(t *testing.T) {
+		stubLogin(t)
+		cli.PollInterval = 5 * time.Second
+		loginServer(t, 900, false)
+		ui, buf := testUI()
+
+		start := time.Now()
+		err := (&cli.LoginCmd{UI: ui, Timeout: 50 * time.Millisecond}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Less(t, time.Since(start), 2*time.Second, buf.String())
+		assert.Equal(t, "timed out after 50ms waiting for authorization; run 'tx login' again", err.Error(), buf.String())
+	})
+
+	t.Run("negative --timeout is a usage error", func(t *testing.T) {
+		stubLogin(t)
+		var requests atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests.Add(1)
+		}))
+		defer srv.Close()
+		t.Setenv("TX_API_URL", srv.URL)
+		ui, buf := testUI()
+
+		err := (&cli.LoginCmd{UI: ui, Timeout: -time.Second}).Execute(nil)
+
+		require.Error(t, err, buf.String())
+		assert.Equal(t, `invalid --timeout "-1s": must not be negative`, err.Error(), buf.String())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code, buf.String())
+		assert.Zero(t, requests.Load(), buf.String())
 	})
 
 	t.Run("device code request fails", func(t *testing.T) {
@@ -438,20 +627,21 @@ Hello
 func TestInitCmd(t *testing.T) {
 	t.Run("auto-discovers tex files in non-TTY mode", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
 		os.WriteFile(filepath.Join(dir, "helper.tex"), []byte(`\newcommand{\foo}{bar}`), 0o600)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, "documents:")
 		assert.Contains(t, content, `main: "paper.tex"`)
@@ -463,6 +653,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("discovers multiple tex files", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
@@ -470,7 +661,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -487,17 +678,18 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("falls back to --main when no tex files found", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2021"`)
+		assert.Contains(t, content, `texlive: "2021"`)
 		assert.Contains(t, content, `compiler: "pdflatex"`)
 		assert.Contains(t, content, "documents:")
 		assert.Contains(t, content, `main: "main.tex"`)
@@ -507,10 +699,11 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("falls back to custom --main when no tex files found", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, buf := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "thesis.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "thesis.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -524,12 +717,13 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("fails if config already exists", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte("existing"), 0o600)
 
 		t.Chdir(dir)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", UI: ui}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "already exists")
@@ -537,6 +731,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("generated config is parseable", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
@@ -544,7 +739,7 @@ func TestInitCmd(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "slides", "slides.tex"), []byte(`\documentclass{beamer}`), 0o600)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "pdflatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -553,7 +748,7 @@ func TestInitCmd(t *testing.T) {
 		require.NoError(t, err)
 		config, err := cli.ParseConfig(string(data))
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2021", config.Texlive)
+		assert.Equal(t, "2021", config.Texlive)
 		assert.Equal(t, "pdflatex", config.Compiler)
 		assert.Len(t, config.Documents, 2)
 		assert.Len(t, config.ProjectKey, 22, "tx init should generate a 22-char project_key")
@@ -571,12 +766,13 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("--compiler xelatex writes top-level compiler field", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}`), 0o600)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "xelatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
@@ -592,10 +788,11 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("invalid --compiler value returns error", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, _ := testUI()
-		cmd := &cli.InitCmd{Texlive: "texlive:2021", Compiler: "badcompiler", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2021", Compiler: "badcompiler", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid compiler")
@@ -608,6 +805,7 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("non-TTY with empty texlive and compiler uses defaults", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		ui, buf := testUI()
@@ -626,23 +824,24 @@ func TestInitCmd(t *testing.T) {
 
 	t.Run("explicit flags skip interactive selection", func(t *testing.T) {
 		dir := t.TempDir()
+		unreachableAPI(t)
 		t.Chdir(dir)
 
 		buf := &bytes.Buffer{}
 		ui := cli.NewUIWithOptions(buf, true, strings.NewReader(""))
-		cmd := &cli.InitCmd{Texlive: "texlive:2023", Compiler: "xelatex", Main: "main.tex", UI: ui}
+		cmd := &cli.InitCmd{Texlive: "2023", Compiler: "xelatex", Main: "main.tex", UI: ui}
 		err := cmd.Execute(nil)
 		require.NoError(t, err)
 
 		data, err := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
 		require.NoError(t, err)
 		content := string(data)
-		assert.Contains(t, content, `texlive: "texlive:2023"`)
+		assert.Contains(t, content, `texlive: "2023"`)
 		assert.Contains(t, content, `compiler: "xelatex"`)
 
 		config, err := cli.ParseConfig(content)
 		require.NoError(t, err)
-		assert.Equal(t, "texlive:2023", config.Texlive)
+		assert.Equal(t, "2023", config.Texlive)
 		assert.Equal(t, "xelatex", config.Compiler)
 	})
 }
@@ -725,7 +924,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		written, err := os.ReadFile(filepath.Join(dir, "paper.pdf"))
@@ -815,7 +1014,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "prj_auto123", createdProjectID)
@@ -858,7 +1057,7 @@ documents:
 		t.Setenv("TX_API_URL", apiSrv.URL)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		// RunBuild will error after project creation (mock only handles /api/projects),
 		// but the project_key generation side effect should have completed.
 		require.Error(t, err)
@@ -879,31 +1078,46 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "run `tx init` to set up your project")
 	})
 
 	t.Run("TTY prompts and runs init on confirm", func(t *testing.T) {
 		dir := t.TempDir()
-		// No .tex files with \documentclass — init falls back to main.tex default.
-		// outIsTTY=true so Confirm prompt works; stdinIsTTY=false so selectors use defaults.
+		serveDistributions(t, `{"versions": ["2026", "2025"], "default": "2026"}`)
+		noCredentials(t)
 
 		buf := &bytes.Buffer{}
-		in := strings.NewReader("y\n")
-		ui := cli.NewUIWithTTYOptions(buf, true, false, in)
+		ui := cli.NewUIWithOptions(buf, true, &enterReader{first: "y\n"})
 
 		// Build will init then fail on auth — that's fine, we just check init happened.
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 
 		configData, readErr := os.ReadFile(filepath.Join(dir, ".texops.yaml"))
-		require.NoError(t, readErr)
-		assert.Contains(t, string(configData), "project_key:")
-		assert.Contains(t, string(configData), "main.tex")
+		require.NoError(t, readErr, buf.String())
+		assert.Contains(t, string(configData), "project_key:", buf.String())
+		assert.Contains(t, string(configData), `texlive: "2026"`, buf.String())
+		assert.Contains(t, string(configData), "main.tex", buf.String())
 
 		// Should fail after init (no auth configured), not on missing config.
-		require.Error(t, err)
-		assert.NotContains(t, err.Error(), "tx init")
+		require.Error(t, err, buf.String())
+		assert.NotContains(t, err.Error(), "tx init", buf.String())
+	})
+
+	t.Run("terminal stdout with piped stdin returns friendly error without prompting", func(t *testing.T) {
+		dir := t.TempDir()
+
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("y\n"))
+
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
+
+		require.Error(t, err, buf.String())
+		assert.Equal(t, cli.ExitConfig, cli.AsExitError(err).Code, buf.String())
+		assert.Contains(t, err.Error(), "run `tx init` to set up your project", buf.String())
+		assert.NotContains(t, buf.String(), "[Y/n]", buf.String())
+		assert.NoFileExists(t, filepath.Join(dir, ".texops.yaml"), buf.String())
 	})
 
 	t.Run("TTY declined returns friendly error", func(t *testing.T) {
@@ -914,7 +1128,7 @@ func TestBuildCmd_AutoInit(t *testing.T) {
 		in := strings.NewReader("n\n")
 		ui := cli.NewUIWithOptions(buf, true, in)
 
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "run `tx init` to set up your project")
 
@@ -1006,7 +1220,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, true, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, true, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 		require.NotNil(t, receivedBuildOptions, "build_options should be sent in request")
 		assert.Equal(t, "true", receivedBuildOptions["no_cache"])
@@ -1090,7 +1304,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte("\\documentclass{article}\\begin{document}Hello\\end{document}"), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 		_, hasBuildOptions := receivedBody["build_options"]
 		assert.False(t, hasBuildOptions, "build_options should not be sent when --no-cache is not set")
@@ -1198,7 +1412,7 @@ documents:
 		))
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -1217,7 +1431,7 @@ documents:
 		dir, requests := startSetup(t, sse(`event: done`+"\n"+`data: {"status":"success"}`))
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		assert.NotContains(t, buf.String(), "Sandbox ready")
@@ -1229,7 +1443,7 @@ documents:
 		dir, requests := startSetup(t, nil)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		assert.NotContains(t, buf.String(), "Sandbox ready")
@@ -1245,7 +1459,7 @@ documents:
 		))
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.Error(t, err)
 
 		assert.Contains(t, buf.String(), "Failed to start sandbox: failed to set up TeX Live 2023")
@@ -1391,7 +1605,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		// Should get exactly one session and one sync for same-version docs
@@ -1426,7 +1640,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		// Should get two sessions (one per version) and two syncs
@@ -1451,7 +1665,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), s.dir, []string{"paper"}, false, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, []string{"paper"}, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		// Only one document should be built
@@ -1470,7 +1684,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, ".texops.yaml"), []byte(config), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, []string{"nonexistent"}, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, []string{"nonexistent"}, false, false, cli.LogTerminal, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown document")
 		assert.Contains(t, err.Error(), "nonexistent")
@@ -1488,7 +1702,7 @@ documents:
 		s := multiDocSetup(t, config, "slides.tex") // slides will fail
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, cli.LogTerminal, ui)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "one or more documents failed to build")
 
@@ -1502,7 +1716,7 @@ documents:
 		output := buf.String()
 		assert.Contains(t, output, "1 succeeded, 1 failed")
 		assert.Contains(t, output, "paper => paper.pdf")
-		assert.Contains(t, output, "slides !! FAILED")
+		assert.Contains(t, output, "slides: FAILED (internal)\n")
 	})
 
 	t.Run("single document prints summary", func(t *testing.T) {
@@ -1514,7 +1728,7 @@ documents:
 		s := multiDocSetup(t, config, "")
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		output := buf.String()
@@ -1537,7 +1751,7 @@ documents:
 		os.WriteFile(filepath.Join(s.dir, "chapters", "paper", "paper.tex"), []byte(`\documentclass{article}\begin{document}Paper\end{document}`), 0o600)
 
 		ui, buf := testUI()
-		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), s.dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		assert.Len(t, *s.buildRequests, 2)
@@ -1637,7 +1851,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "xelatex", receivedCompiler, "compiler from config should be sent in build request")
@@ -1731,7 +1945,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "slides.tex"), []byte(`\documentclass{beamer}\begin{document}Slides\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		require.Len(t, receivedCompilers, 2)
@@ -1818,7 +2032,7 @@ documents:
 		os.WriteFile(filepath.Join(dir, "paper.tex"), []byte(`\documentclass{article}\begin{document}Hello\end{document}`), 0o600)
 
 		ui, _ := testUI()
-		err := cli.RunBuild(t.Context(), dir, nil, false, false, ui)
+		err := cli.RunBuild(t.Context(), dir, nil, false, false, cli.LogTerminal, ui)
 		require.NoError(t, err)
 
 		assert.Equal(t, "pdflatex", receivedCompiler, "default compiler should be pdflatex")
@@ -1941,11 +2155,10 @@ func TestStatusCmd(t *testing.T) {
 		ui, buf := testUI()
 		cmd := &cli.StatusCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.NoError(t, err)
+		require.Error(t, err, buf.String())
 
-		output := buf.String()
-		assert.Contains(t, output, "Not authenticated.")
-		assert.Contains(t, output, "tx login")
+		assert.Equal(t, "not authenticated: ask the user to run 'tx login' in a terminal, or set TX_API_TOKEN (create one with 'tx token create')", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
 	})
 
 	t.Run("API returns 401 suggests re-login", func(t *testing.T) {
@@ -1962,11 +2175,10 @@ func TestStatusCmd(t *testing.T) {
 		ui, buf := testUI()
 		cmd := &cli.StatusCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.NoError(t, err)
+		require.Error(t, err, buf.String())
 
-		output := buf.String()
-		assert.Contains(t, output, "Session expired")
-		assert.Contains(t, output, "tx login")
+		assert.Equal(t, "Session expired. Run 'tx login' to re-authenticate.", err.Error())
+		assert.Equal(t, cli.ExitAuth, cli.AsExitError(err).Code)
 	})
 
 	t.Run("API returns 500 propagates error", func(t *testing.T) {
@@ -1983,10 +2195,11 @@ func TestStatusCmd(t *testing.T) {
 		ui, buf := testUI()
 		cmd := &cli.StatusCmd{UI: ui}
 		err := cmd.Execute(nil)
-		require.Error(t, err)
+		require.Error(t, err, buf.String())
 
-		output := buf.String()
-		assert.Contains(t, output, "Error:")
+		assert.Contains(t, err.Error(), "internal server error")
+		assert.Equal(t, cli.ExitFailure, cli.AsExitError(err).Code)
+		assert.NotContains(t, buf.String(), "internal server error", "the error is printed once by the caller, not by the command")
 	})
 }
 
@@ -2177,7 +2390,10 @@ func TestTokenCreateCmd(t *testing.T) {
 		}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
-		assert.Contains(t, buf.String(), "already exists")
+		require.ErrorIs(t, err, cli.ErrTokenConflict)
+		assert.Equal(t, `token name already exists: "duplicate"`, err.Error())
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.NotContains(t, buf.String(), "already exists")
 	})
 
 	t.Run("create with interactive expiry selection", func(t *testing.T) {
@@ -2233,7 +2449,33 @@ func TestTokenCreateCmd(t *testing.T) {
 		}
 		err := cmd.Execute(nil)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "specify --name in non-interactive mode")
+		assert.Contains(t, err.Error(), "specify the token name (tx token create <name>, or --name) in non-interactive mode")
+	})
+
+	t.Run("stdout TTY with non-TTY stdin does not prompt for a name", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("my-ci-token\r"))
+		cmd := &cli.TokenCreateCmd{
+			ExpiresIn: "30d",
+			UI:        ui,
+		}
+		err := cmd.Execute(nil)
+		require.Error(t, err)
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Contains(t, err.Error(), "specify the token name (tx token create <name>, or --name) in non-interactive mode")
+	})
+
+	t.Run("stdout TTY with non-TTY stdin does not prompt for the expiry", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		ui := cli.NewUIWithTTYOptions(buf, true, false, strings.NewReader("\r"))
+		cmd := &cli.TokenCreateCmd{
+			Name: "ci",
+			UI:   ui,
+		}
+		err := cmd.Execute(nil)
+		require.Error(t, err)
+		assert.Equal(t, cli.ExitUsage, cli.AsExitError(err).Code)
+		assert.Contains(t, err.Error(), "specify --expires-in or --no-expiry in non-interactive mode")
 	})
 
 	t.Run("interactive name prompt via TTY", func(t *testing.T) {
@@ -2387,13 +2629,12 @@ func TestTokenDeleteCmd(t *testing.T) {
 		mockKeyringForAuth(t, "test-jwt-token")
 		t.Setenv("TX_API_URL", srv.URL)
 
-		// Non-TTY auto-confirms
 		ui, buf := testUI()
-		cmd := &cli.TokenDeleteCmd{UI: ui}
+		cmd := &cli.TokenDeleteCmd{Yes: true, UI: ui}
 		err := cmd.Execute([]string{"CI prod"})
-		require.NoError(t, err)
+		require.NoError(t, err, buf.String())
 
-		assert.Equal(t, "tok_01ABC", deletedID)
+		assert.Equal(t, "tok_01ABC", deletedID, buf.String())
 		assert.Contains(t, buf.String(), "Token deleted")
 	})
 
@@ -2419,7 +2660,7 @@ func TestTokenDeleteCmd(t *testing.T) {
 		t.Setenv("TX_API_URL", srv.URL)
 
 		ui, _ := testUI()
-		cmd := &cli.TokenDeleteCmd{UI: ui}
+		cmd := &cli.TokenDeleteCmd{Yes: true, UI: ui}
 		err := cmd.Execute([]string{"nonexistent"})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")

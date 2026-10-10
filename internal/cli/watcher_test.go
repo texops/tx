@@ -114,6 +114,31 @@ func TestFileWatcher(t *testing.T) {
 		assert.Equal(t, "main.tex", ev)
 	})
 
+	t.Run("ignores saved build logs under .texops", func(t *testing.T) {
+		dir := t.TempDir()
+
+		w, err := cli.NewFileWatcher(dir, nil)
+		require.NoError(t, err)
+		defer w.Close()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go w.Run(ctx)
+
+		require.NoError(t, os.MkdirAll(filepath.Join(dir, ".texops", "logs"), 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops", ".gitignore"), []byte("*\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops", "logs", "paper.log"), []byte("log"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, ".texops", "logs", "paper.log"), []byte("log again"), 0o600))
+
+		noEvent(t, w.Events, 500*time.Millisecond)
+
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.tex"), []byte("content"), 0o600))
+
+		ev, ok := waitForEvent(t, w.Events, 2*time.Second)
+		assert.True(t, ok, "expected event for main.tex")
+		assert.Equal(t, "main.tex", ev)
+	})
+
 	t.Run("watches new subdirectories", func(t *testing.T) {
 		dir := t.TempDir()
 
@@ -291,5 +316,80 @@ func TestWatchAndBuild(t *testing.T) {
 
 		cancel()
 		<-done
+	})
+
+	t.Run("live rebuild prints the diagnostics of failed documents", func(t *testing.T) {
+		dir := t.TempDir()
+		var out bytes.Buffer
+		ui := cli.NewUIWithOptions(&out, false, nil)
+
+		buildStarted := make(chan struct{}, 5)
+		build := func(ctx context.Context) ([]cli.DocResult, error) {
+			buildStarted <- struct{}{}
+			return []cli.DocResult{
+				{Name: "paper", Output: "paper.pdf", Log: ".texops/logs/paper.log", Diagnostics: []cli.Diagnostic{
+					{Severity: "error", File: "paper.tex", Line: 3, Message: "Undefined control sequence."},
+				}},
+				{Name: "slides", Output: "slides.pdf", Success: true},
+			}, nil
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		done := make(chan error, 1)
+		go func() {
+			done <- cli.WatchAndBuildWith(ctx, dir, ui, build)
+		}()
+		time.Sleep(100 * time.Millisecond)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tex"), []byte("v1"), 0o600))
+
+		select {
+		case <-buildStarted:
+		case <-time.After(3 * time.Second):
+			t.Fatal("build did not start")
+		}
+		cancel()
+		<-done
+
+		output := out.String()
+		assert.Contains(t, output, "  paper: FAILED, 1 error, 0 warnings (log: .texops/logs/paper.log)\n    paper.tex:3: error: Undefined control sequence.\n", output)
+		assert.NotContains(t, output, "slides =>", output)
+	})
+
+	t.Run("live rebuild prints the warnings of successful documents", func(t *testing.T) {
+		dir := t.TempDir()
+		var out bytes.Buffer
+		ui := cli.NewUIWithOptions(&out, false, nil)
+
+		buildStarted := make(chan struct{}, 5)
+		build := func(ctx context.Context) ([]cli.DocResult, error) {
+			buildStarted <- struct{}{}
+			return []cli.DocResult{
+				{Name: "paper", Output: "paper.pdf", Success: true, Diagnostics: []cli.Diagnostic{
+					{Severity: "warning", Kind: "undefined_reference", File: "paper.tex", Line: 7, Message: "Reference `fig:x' undefined"},
+				}},
+			}, nil
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		done := make(chan error, 1)
+		go func() {
+			done <- cli.WatchAndBuildWith(ctx, dir, ui, build)
+		}()
+		time.Sleep(100 * time.Millisecond)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "a.tex"), []byte("v1"), 0o600))
+
+		select {
+		case <-buildStarted:
+		case <-time.After(3 * time.Second):
+			t.Fatal("build did not start")
+		}
+		cancel()
+		<-done
+
+		output := out.String()
+		assert.Contains(t, output, "Built paper.pdf\n", output)
+		assert.Contains(t, output, "  paper => paper.pdf, 0 errors, 1 warning\n    paper.tex:7: warning: Reference `fig:x' undefined\n", output)
 	})
 }

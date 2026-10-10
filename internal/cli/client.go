@@ -19,14 +19,23 @@ import (
 
 var validIDPattern = regexp.MustCompile(`^[a-z]{3}_[0-9A-Za-z]+$`)
 
+var validLogURLPattern = regexp.MustCompile(`^/projects/[a-z]{3}_[0-9A-Za-z]+/builds/[a-z]{3}_[0-9A-Za-z]+/log$`)
+
 // APIError represents an HTTP error response from the API.
 type APIError struct {
+	Op         string
 	StatusCode int
 	Body       string
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("API error (%d): %s", e.StatusCode, e.Body)
+	if e.Op == "" {
+		return fmt.Sprintf("API error (%d): %s", e.StatusCode, e.Body)
+	}
+	if e.Body == "" {
+		return fmt.Sprintf("%s failed (%d)", e.Op, e.StatusCode)
+	}
+	return fmt.Sprintf("%s failed (%d): %s", e.Op, e.StatusCode, e.Body)
 }
 
 type APIClient struct {
@@ -51,10 +60,24 @@ type SyncResult struct {
 }
 
 type BuildDoneEvent struct {
-	Status  string `json:"status"`
-	PdfURL  string `json:"pdfUrl,omitempty"`
-	Message string `json:"message,omitempty"`
-	BuildID string `json:"build_id,omitempty"`
+	Status      string       `json:"status"`
+	PdfURL      string       `json:"pdfUrl,omitempty"`
+	Message     string       `json:"message,omitempty"`
+	BuildID     string       `json:"build_id,omitempty"`
+	Reason      string       `json:"reason,omitempty"`
+	LogURL      string       `json:"log_url,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+	Truncated   bool         `json:"truncated,omitempty"`
+}
+
+// Diagnostic is one LaTeX error or warning reported for a build.
+type Diagnostic struct {
+	Severity string `json:"severity"`
+	Kind     string `json:"kind,omitempty"`
+	File     string `json:"file,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Message  string `json:"message"`
+	Context  string `json:"context,omitempty"`
 }
 
 type DeviceCodeResponse struct {
@@ -84,6 +107,15 @@ func readErrorBody(resp *http.Response) string {
 		return errResp.Error
 	}
 	return s
+}
+
+func newRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", currentUserAgent())
+	return req, nil
 }
 
 func NewAPIClient(baseURL, apiKey string) *APIClient {
@@ -117,7 +149,7 @@ func (c *APIClient) CreateProject(ctx context.Context, name, distVersion, projec
 		return CreateProjectResponse{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/api/projects", bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", c.baseURL+"/api/projects", bytes.NewReader(body))
 	if err != nil {
 		return CreateProjectResponse{}, err
 	}
@@ -131,7 +163,7 @@ func (c *APIClient) CreateProject(ctx context.Context, name, distVersion, projec
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return CreateProjectResponse{}, fmt.Errorf("create project failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return CreateProjectResponse{}, &APIError{Op: "create project", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result CreateProjectResponse
@@ -151,7 +183,7 @@ func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersi
 		return SessionResponse{}, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return SessionResponse{}, err
 	}
@@ -165,7 +197,7 @@ func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersi
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return SessionResponse{}, fmt.Errorf("get session failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return SessionResponse{}, &APIError{Op: "get session", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result SessionResponse
@@ -176,7 +208,7 @@ func (c *APIClient) GetSession(ctx context.Context, projectID, distributionVersi
 }
 
 func (c *APIClient) RequestDeviceCode() (DeviceCodeResponse, error) {
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/device-code", nil)
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/device-code", nil)
 	if err != nil {
 		return DeviceCodeResponse{}, err
 	}
@@ -188,7 +220,7 @@ func (c *APIClient) RequestDeviceCode() (DeviceCodeResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return DeviceCodeResponse{}, fmt.Errorf("device code request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return DeviceCodeResponse{}, &APIError{Op: "device code request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result DeviceCodeResponse
@@ -204,7 +236,7 @@ func (c *APIClient) PollToken(deviceCode string) (TokenResponse, error) {
 		return TokenResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/token", bytes.NewReader(body))
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/token", bytes.NewReader(body))
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -228,12 +260,12 @@ func (c *APIClient) PollToken(deviceCode string) (TokenResponse, error) {
 	case http.StatusGone: // 410 — expired
 		return TokenResponse{}, ErrDeviceCodeExpired
 	default:
-		return TokenResponse{}, fmt.Errorf("token request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return TokenResponse{}, &APIError{Op: "token request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 }
 
 func (c *APIClient) RefreshToken(jwt string) (TokenResponse, error) {
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/refresh", nil)
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/refresh", nil)
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -246,7 +278,7 @@ func (c *APIClient) RefreshToken(jwt string) (TokenResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return TokenResponse{}, fmt.Errorf("refresh failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return TokenResponse{}, &APIError{Op: "refresh", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result TokenResponse
@@ -264,7 +296,7 @@ type WhoamiResponse struct {
 }
 
 func (c *APIClient) Whoami() (WhoamiResponse, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/auth/whoami", nil)
+	req, err := newRequest(context.Background(), "GET", c.baseURL+"/auth/whoami", nil)
 	if err != nil {
 		return WhoamiResponse{}, err
 	}
@@ -324,7 +356,7 @@ func (c *APIClient) CreateAPIToken(name string, expiresIn *int64) (APITokenRespo
 		return APITokenResponse{}, err
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL+"/auth/tokens", bytes.NewReader(body))
+	req, err := newRequest(context.Background(), "POST", c.baseURL+"/auth/tokens", bytes.NewReader(body))
 	if err != nil {
 		return APITokenResponse{}, err
 	}
@@ -352,7 +384,7 @@ func (c *APIClient) CreateAPIToken(name string, expiresIn *int64) (APITokenRespo
 }
 
 func (c *APIClient) ListAPITokens() ([]APITokenListItem, error) {
-	req, err := http.NewRequest("GET", c.baseURL+"/auth/tokens", nil)
+	req, err := newRequest(context.Background(), "GET", c.baseURL+"/auth/tokens", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -375,11 +407,41 @@ func (c *APIClient) ListAPITokens() ([]APITokenListItem, error) {
 	return result, nil
 }
 
+// DistributionsResponse lists the TeX Live versions the API accepts, newest first.
+type DistributionsResponse struct {
+	Versions []string `json:"versions"`
+	Default  string   `json:"default"`
+}
+
+// Distributions fetches the supported TeX Live versions. It needs no authentication.
+func (c *APIClient) Distributions(ctx context.Context) (DistributionsResponse, error) {
+	req, err := newRequest(ctx, "GET", c.baseURL+"/api/distributions", nil)
+	if err != nil {
+		return DistributionsResponse{}, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return DistributionsResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return DistributionsResponse{}, &APIError{Op: "list distributions", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
+	}
+
+	var result DistributionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return DistributionsResponse{}, err
+	}
+	return result, nil
+}
+
 func (c *APIClient) DeleteAPIToken(tokenID string) error {
 	if !validIDPattern.MatchString(tokenID) {
 		return fmt.Errorf("invalid token ID format")
 	}
-	req, err := http.NewRequest("DELETE", c.baseURL+"/auth/tokens/"+tokenID, nil)
+	req, err := newRequest(context.Background(), "DELETE", c.baseURL+"/auth/tokens/"+tokenID, nil)
 	if err != nil {
 		return err
 	}
@@ -425,7 +487,7 @@ var ErrStartUnsupported = errors.New("server does not support sandbox start")
 // Start brings the project's sandbox up, calling onLog with each progress message.
 func (c *InstanceClient) Start(ctx context.Context, projectID string, onLog func(string)) error {
 	u := fmt.Sprintf("%s/projects/%s/start", c.baseURL, projectID)
-	req, err := http.NewRequestWithContext(ctx, "POST", u, nil)
+	req, err := newRequest(ctx, "POST", u, nil)
 	if err != nil {
 		return err
 	}
@@ -441,7 +503,7 @@ func (c *InstanceClient) Start(ctx context.Context, projectID string, onLog func
 		return ErrStartUnsupported
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("sandbox start failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return &APIError{Op: "sandbox start", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	done, err := ParseSSEStream(resp.Body, onLog)
@@ -466,7 +528,7 @@ func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []Fil
 
 	u := fmt.Sprintf("%s/projects/%s/sync", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(data))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(data))
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -480,7 +542,7 @@ func (c *InstanceClient) Sync(ctx context.Context, projectID string, files []Fil
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return SyncResult{}, fmt.Errorf("sync failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return SyncResult{}, &APIError{Op: "sync", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
 	var result SyncResult
@@ -576,7 +638,7 @@ func planUploadChunks(dir string, filePaths []string, limit int64) ([]uploadChun
 func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarData []byte) error {
 	u := fmt.Sprintf("%s/projects/%s/upload", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(tarData))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(tarData))
 	if err != nil {
 		return err
 	}
@@ -590,12 +652,73 @@ func (c *InstanceClient) UploadRaw(ctx context.Context, projectID string, tarDat
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upload failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return &APIError{Op: "upload", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 	return nil
 }
 
 func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
+	return c.build(ctx, projectID, main, directory, distVersion, compiler, args, buildOptions, onLog, onLog)
+}
+
+// Build runs a build, calling onLog with each line of build output and
+// onQueued with each queue status message.
+func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog, onQueued func(string)) (BuildDoneEvent, error) {
+	return c.build(ctx, projectID, main, directory, distVersion, compiler, nil, buildOptions, onLog, onQueued)
+}
+
+func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, outputPath string) error {
+	if !validIDPattern.MatchString(buildID) {
+		return fmt.Errorf("invalid build ID format")
+	}
+	u := fmt.Sprintf("%s/projects/%s/builds/%s/output", c.baseURL, projectID, buildID)
+
+	req, err := newRequest(ctx, "GET", u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.jwt)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return &APIError{Op: "PDF download", StatusCode: resp.StatusCode}
+	}
+
+	return writeFilePreserveInode(resp.Body, outputPath)
+}
+
+// DownloadLog saves the TeX log at logURL, a path relative to the instance
+// from the build's done event, to outputPath.
+func (c *InstanceClient) DownloadLog(ctx context.Context, logURL, outputPath string) error {
+	if !validLogURLPattern.MatchString(logURL) {
+		return fmt.Errorf("invalid log URL %q", logURL)
+	}
+
+	req, err := newRequest(ctx, "GET", c.baseURL+logURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.jwt)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return &APIError{Op: "log download", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
+	}
+
+	return writeFilePreserveInode(resp.Body, outputPath)
+}
+
+func (c *InstanceClient) build(ctx context.Context, projectID, main, directory, distVersion, compiler string, args []string, buildOptions map[string]string, onLog, onQueued func(string)) (BuildDoneEvent, error) {
 	payload := map[string]any{
 		"main":                 main,
 		"distribution_version": distVersion,
@@ -616,7 +739,7 @@ func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, dir
 
 	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
+	req, err := newRequest(ctx, "POST", u, bytes.NewReader(body))
 	if err != nil {
 		return BuildDoneEvent{}, err
 	}
@@ -630,73 +753,10 @@ func (c *InstanceClient) BuildWithArgs(ctx context.Context, projectID, main, dir
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return BuildDoneEvent{}, fmt.Errorf("build request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return BuildDoneEvent{}, &APIError{Op: "build request", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 
-	return ParseSSEStream(resp.Body, onLog)
-}
-
-func (c *InstanceClient) Build(ctx context.Context, projectID, main, directory, distVersion, compiler string, buildOptions map[string]string, onLog func(string)) (BuildDoneEvent, error) {
-	payload := map[string]any{
-		"main":                 main,
-		"distribution_version": distVersion,
-	}
-	if directory != "" {
-		payload["directory"] = directory
-	}
-	if compiler != "" {
-		payload["compiler"] = compiler
-	}
-	if len(buildOptions) > 0 {
-		payload["build_options"] = buildOptions
-	}
-	body, _ := json.Marshal(payload)
-
-	u := fmt.Sprintf("%s/projects/%s/build", c.baseURL, projectID)
-
-	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(body))
-	if err != nil {
-		return BuildDoneEvent{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.jwt)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return BuildDoneEvent{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return BuildDoneEvent{}, fmt.Errorf("build request failed (%d): %s", resp.StatusCode, readErrorBody(resp))
-	}
-
-	return ParseSSEStream(resp.Body, onLog)
-}
-
-func (c *InstanceClient) DownloadPDF(ctx context.Context, projectID, buildID, outputPath string) error {
-	if !validIDPattern.MatchString(buildID) {
-		return fmt.Errorf("invalid build ID format")
-	}
-	u := fmt.Sprintf("%s/projects/%s/builds/%s/output", c.baseURL, projectID, buildID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.jwt)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("PDF download failed (%d)", resp.StatusCode)
-	}
-
-	return writeFilePreserveInode(resp.Body, outputPath)
+	return ParseSSEEvents(resp.Body, onLog, onQueued)
 }
 
 func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarData []byte, onSent func(int64)) error {
@@ -715,7 +775,7 @@ func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarDat
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	req, err := newRequest(ctx, "POST", u, body)
 	if err != nil {
 		return err
 	}
@@ -730,7 +790,7 @@ func (c *InstanceClient) uploadTar(ctx context.Context, projectID string, tarDat
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upload failed (%d): %s", resp.StatusCode, readErrorBody(resp))
+		return &APIError{Op: "upload", StatusCode: resp.StatusCode, Body: readErrorBody(resp)}
 	}
 	return nil
 }
@@ -774,12 +834,20 @@ func writeFilePreserveInode(r io.Reader, outputPath string) error {
 }
 
 func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error) {
+	return ParseSSEEvents(reader, onLog, onLog)
+}
+
+// A done event carries the build's diagnostics on one data line.
+const maxSSELineBytes = 8 << 20
+
+func ParseSSEEvents(reader io.Reader, onLog, onQueued func(string)) (BuildDoneEvent, error) {
 	result := BuildDoneEvent{
 		Status:  "error",
 		Message: "Stream ended unexpectedly",
 	}
 
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64<<10), maxSSELineBytes)
 	var eventType, eventData string
 
 	for scanner.Scan() {
@@ -793,8 +861,8 @@ func ParseSSEStream(reader io.Reader, onLog func(string)) (BuildDoneEvent, error
 						onLog(extractSSEMessage(eventData))
 					}
 				case "queued":
-					if onLog != nil {
-						onLog(extractSSEMessage(eventData))
+					if onQueued != nil {
+						onQueued(extractSSEMessage(eventData))
 					}
 				case "done":
 					if err := json.Unmarshal([]byte(eventData), &result); err != nil {

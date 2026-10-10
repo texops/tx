@@ -1,0 +1,32 @@
+Usage:
+  tx [OPTIONS] <command>
+
+Compile LaTeX projects remotely with TexOps.
+
+Typical use:
+  tx init --texlive 2025 --compiler pdflatex   # writes .texops.yaml
+  tx build                                     # builds every document
+  tx build paper --json                        # one document, machine-readable
+
+Authentication: 'tx login' (interactive) or TX_API_TOKEN (CI, agents).
+Without a terminal, tx never prompts: it uses defaults or fails (exit 2, or 4
+without .texops.yaml).
+On failure the diagnostics name file:line; with --log=file the full log goes
+to .texops/logs/.
+
+Exit codes: 0 ok, 1 service error, 2 usage, 3 auth, 4 config, 5 LaTeX errors.
+Run 'tx <command> --help' for details on a command.
+
+Application Options:
+      --json  Print exactly one JSON document to stdout, also on failure;
+              progress and errors go to stderr
+
+Help Options:
+  -h, --help  Show this help message
+
+Available commands:
+  build   Build the LaTeX project
+  init    Initialize a new TexOps project
+  login   Log in to TexOps
+  status  Show authentication status
+  token   Manage API tokens

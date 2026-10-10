@@ -6,6 +6,7 @@ const sidebars: SidebarsConfig = {
     'configuration',
     'ci-cd',
     'cli',
+    'agents',
   ],
 };
 

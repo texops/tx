@@ -270,7 +270,7 @@ func watchAndBuildWith(ctx context.Context, dir string, ui *UI, build func(conte
 	}
 	defer fw.Close()
 
-	ui.Log("")
+	ui.Gap()
 	ui.Status("Watching for changes... (Ctrl+C to stop)")
 
 	go fw.Run(ctx)
@@ -365,5 +365,13 @@ func printBuildResult(ui *UI, results []docResult) {
 	}
 	if len(succeeded) > 0 {
 		ui.Status(fmt.Sprintf("[%s] Built %s", now, strings.Join(succeeded, ", ")))
+	}
+	for _, r := range results {
+		if r.Success && len(r.Diagnostics) == 0 {
+			continue
+		}
+		for _, line := range docSummaryLines(r) {
+			ui.DimInfo(line)
+		}
 	}
 }

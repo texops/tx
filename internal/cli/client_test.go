@@ -397,7 +397,7 @@ func TestInstanceClient_Build(t *testing.T) {
 		var logs []string
 		result, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, func(line string) {
 			logs = append(logs, line)
-		})
+		}, nil)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"Compiling...", "Done."}, logs)
 		assert.Equal(t, "success", result.Status)
@@ -418,7 +418,7 @@ func TestInstanceClient_Build(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		result, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, nil)
+		result, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, nil, nil)
 		require.NoError(t, err)
 		assert.Equal(t, "error", result.Status)
 		assert.Equal(t, "Build failed", result.Message)
@@ -433,7 +433,7 @@ func TestInstanceClient_Build(t *testing.T) {
 
 		client := cli.NewInstanceClient(srv.URL, "jwt")
 		client.SetHTTPClient(srv.Client())
-		_, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, nil)
+		_, err := client.Build(t.Context(), "prj_123", "paper.tex", "", "texlive:2021", "", nil, nil, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "build request failed (500)")
 	})
@@ -538,6 +538,45 @@ func TestParseSSEStream(t *testing.T) {
 		assert.Equal(t, "failed", result.Message)
 	})
 
+	t.Run("parses the reason, log URL and diagnostics of a done event", func(t *testing.T) {
+		input := "event: done\ndata: {\"status\":\"error\",\"reason\":\"latex_error\",\"message\":\"1 LaTeX error in sec/intro.tex\",\"build_id\":\"bld_1\",\"log_url\":\"/projects/prj_1/builds/bld_1/log\",\"diagnostics\":[{\"severity\":\"error\",\"file\":\"sec/intro.tex\",\"line\":3,\"message\":\"Undefined control sequence.\",\"context\":\"\\\\badmacro\"},{\"severity\":\"warning\",\"kind\":\"undefined_citation\",\"file\":\"sec/intro.tex\",\"line\":1,\"message\":\"Citation `missing' undefined\"}],\"truncated\":true}\n\n"
+
+		result, err := cli.ParseSSEStream(strings.NewReader(input), nil)
+
+		require.NoError(t, err, input)
+		assert.Equal(t, cli.BuildDoneEvent{
+			Status:  "error",
+			Reason:  "latex_error",
+			Message: "1 LaTeX error in sec/intro.tex",
+			BuildID: "bld_1",
+			LogURL:  "/projects/prj_1/builds/bld_1/log",
+			Diagnostics: []cli.Diagnostic{
+				{Severity: "error", File: "sec/intro.tex", Line: 3, Message: "Undefined control sequence.", Context: "\\badmacro"},
+				{Severity: "warning", Kind: "undefined_citation", File: "sec/intro.tex", Line: 1, Message: "Citation `missing' undefined"},
+			},
+			Truncated: true,
+		}, result, input)
+	})
+
+	t.Run("done event from an old server has no diagnostics", func(t *testing.T) {
+		input := "event: done\ndata: {\"status\":\"error\",\"message\":\"build failed with exit code 12\",\"build_id\":\"bld_1\"}\n\n"
+
+		result, err := cli.ParseSSEStream(strings.NewReader(input), nil)
+
+		require.NoError(t, err, input)
+		assert.Equal(t, cli.BuildDoneEvent{Status: "error", Message: "build failed with exit code 12", BuildID: "bld_1"}, result, input)
+	})
+
+	t.Run("done event longer than 64KB", func(t *testing.T) {
+		message := strings.Repeat("x", 100<<10)
+		input := "event: done\ndata: {\"status\":\"success\",\"message\":\"" + message + "\"}\n\n"
+
+		result, err := cli.ParseSSEStream(strings.NewReader(input), nil)
+
+		require.NoError(t, err)
+		assert.Equal(t, cli.BuildDoneEvent{Status: "success", Message: message}, result)
+	})
+
 	t.Run("handles queued event", func(t *testing.T) {
 		input := "event: queued\ndata: {\"message\":\"build queued, waiting for previous build to finish\"}\n\nevent: log\ndata: {\"message\":\"Starting build\"}\n\nevent: done\ndata: {\"status\":\"success\"}\n\n"
 		reader := strings.NewReader(input)
@@ -549,6 +588,22 @@ func TestParseSSEStream(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"build queued, waiting for previous build to finish", "Starting build"}, logs)
 		assert.Equal(t, "success", result.Status)
+	})
+
+	t.Run("separates queued events from build output", func(t *testing.T) {
+		input := "event: queued\ndata: {\"message\":\"build queued, waiting for previous build to finish\"}\n\nevent: log\ndata: {\"message\":\"Starting build\"}\n\nevent: done\ndata: {\"status\":\"success\"}\n\n"
+
+		var logs, queued []string
+		result, err := cli.ParseSSEEvents(strings.NewReader(input), func(line string) {
+			logs = append(logs, line)
+		}, func(msg string) {
+			queued = append(queued, msg)
+		})
+
+		require.NoError(t, err, input)
+		assert.Equal(t, []string{"Starting build"}, logs, input)
+		assert.Equal(t, []string{"build queued, waiting for previous build to finish"}, queued, input)
+		assert.Equal(t, "success", result.Status, input)
 	})
 }
 
@@ -746,6 +801,39 @@ func TestAPIClient_Whoami(t *testing.T) {
 	})
 }
 
+func TestAPIClient_Distributions(t *testing.T) {
+	t.Run("returns versions and default without authentication", func(t *testing.T) {
+		var method, path, authorization string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			method, path, authorization = r.Method, r.URL.Path, r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"versions": ["2025", "2024", "2023"], "default": "2025"}`))
+		}))
+		defer srv.Close()
+
+		client := cli.NewUnauthenticatedAPIClient(srv.URL)
+		result, err := client.Distributions(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "GET", method)
+		assert.Equal(t, "/api/distributions", path)
+		assert.Empty(t, authorization)
+		assert.Equal(t, cli.DistributionsResponse{Versions: []string{"2025", "2024", "2023"}, Default: "2025"}, result)
+	})
+
+	t.Run("returns an API error on a non-200 response", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"not found"}`))
+		}))
+		defer srv.Close()
+
+		client := cli.NewUnauthenticatedAPIClient(srv.URL)
+		_, err := client.Distributions(t.Context())
+		require.Error(t, err)
+		assert.Equal(t, "list distributions failed (404): not found", err.Error())
+	})
+}
+
 func TestE2E_TwoClients(t *testing.T) {
 	t.Run("full build flow with API + instance mock servers", func(t *testing.T) {
 		pdfContent := []byte("%PDF-1.4 test output")
@@ -839,7 +927,7 @@ func TestE2E_TwoClients(t *testing.T) {
 		var logs []string
 		result, err := inst.Build(t.Context(), project.ID, "paper.tex", "", "texlive:2021", "", nil, func(line string) {
 			logs = append(logs, line)
-		})
+		}, nil)
 		require.NoError(t, err)
 		assert.Equal(t, "success", result.Status)
 		assert.Equal(t, []string{"Running latexmk..."}, logs)
@@ -876,7 +964,7 @@ func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "chapters/paper", "texlive:2021", "", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "chapters/paper", "texlive:2021", "", nil, nil, nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, "paper.tex", receivedPayload["main"])
@@ -905,7 +993,7 @@ func TestInstanceClient_Build_DirectoryInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "", nil, nil, nil)
 		require.NoError(t, err)
 
 		assert.NotContains(t, string(receivedBody), "directory")
@@ -934,7 +1022,7 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "xelatex", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "xelatex", nil, nil, nil)
 		require.NoError(t, err)
 
 		assert.Equal(t, "paper.tex", receivedPayload["main"])
@@ -963,7 +1051,7 @@ func TestInstanceClient_Build_CompilerInPayload(t *testing.T) {
 		ic := cli.NewInstanceClient(srv.URL, "test-jwt")
 		ic.SetHTTPClient(srv.Client())
 
-		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "", nil, nil)
+		_, err := ic.Build(t.Context(), "prj_001", "paper.tex", "", "texlive:2021", "", nil, nil, nil)
 		require.NoError(t, err)
 
 		assert.NotContains(t, string(receivedBody), "compiler")

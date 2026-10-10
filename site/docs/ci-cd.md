@@ -56,8 +56,9 @@ List all tokens with their prefix, expiry, and last-used date:
 tx token list
 ```
 
-Delete a token by name:
+Delete a token by name. On a terminal `tx` asks for confirmation; in a script, pass `--yes`:
 
 ```bash
 tx token delete "GitHub Actions"
+tx token delete --yes "GitHub Actions"
 ```
